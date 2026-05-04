@@ -39,7 +39,7 @@ const DEFAULT_SEMANTIC = Object.freeze({
 	mediaTypeBadgeShow: '#FF8B5CF6'
 });
 
-const DEFAULT_BOOK = Object.freeze({
+const DEFAULT_BOOK_COLORS = Object.freeze({
 	background: '#FF0F182A',
 	accent: '#FF32B9E8',
 	mutedText: '#FF9EDBFF',
@@ -50,20 +50,21 @@ const DEFAULT_BOOK = Object.freeze({
 	shadow: '#24000000',
 	gradientTop: '#FF18263D',
 	gradientBottom: '#FF0B1424',
-	inactiveChip: '#556388A8',
-	placeholderPalette: [
-		'#FF1A5C9A',
-		'#FF2E7D32',
-		'#FF6A1B9A',
-		'#FF00695C',
-		'#FFC62828',
-		'#FF4527A0',
-		'#FF558B2F',
-		'#FF283593',
-		'#FF4E342E',
-		'#FF00838F'
-	]
+	inactiveChip: '#556388A8'
 });
+
+const DEFAULT_BOOK_PLACEHOLDER_PALETTE = Object.freeze([
+	'#FF1A5C9A',
+	'#FF2E7D32',
+	'#FF6A1B9A',
+	'#FF00695C',
+	'#FFC62828',
+	'#FF4527A0',
+	'#FF558B2F',
+	'#FF283593',
+	'#FF4E342E',
+	'#FF00838F'
+]);
 
 const normalizeHexColor = (value, fieldName) => {
 	if (typeof value !== 'string') {
@@ -225,10 +226,12 @@ export const parseThemeSpec = (json) => {
 		},
 		semantic: parseColorGroup(json.semantic, 'semantic', DEFAULT_SEMANTIC),
 		book: {
-			...parseColorGroup(json.book, 'book', DEFAULT_BOOK),
+			...parseColorGroup(json.book, 'book', DEFAULT_BOOK_COLORS),
 			placeholderPalette: Array.isArray(json.book?.placeholderPalette)
 				? json.book.placeholderPalette.map((color, index) => normalizeHexColor(color, `book.placeholderPalette[${index}]`))
-				: DEFAULT_BOOK.placeholderPalette.slice()
+				: typeof json.book?.placeholderPalette === 'string'
+					? [normalizeHexColor(json.book.placeholderPalette, 'book.placeholderPalette')]
+					: DEFAULT_BOOK_PLACEHOLDER_PALETTE.slice()
 		}
 	};
 };

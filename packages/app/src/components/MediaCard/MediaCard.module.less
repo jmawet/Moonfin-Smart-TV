@@ -70,8 +70,8 @@
 	width: 100%;
 	object-fit: cover;
 	display: block;
-	border-radius: 20px;
-	border: 4px solid transparent;
+	border-radius: var(--theme-card-radius, 20px);
+	border: var(--theme-card-border, 4px solid transparent);
 	transition: border-color 0.2s;
 	box-sizing: border-box; // Ensure padding and border are included in the elements total width and height
 }
@@ -84,14 +84,14 @@
 	background: var(--theme-surface-variant, #2a2a4e);
 	font-size: 64px;
 	color: var(--theme-text-muted, #666);
-	border-radius: 20px;
-	border: 4px solid transparent;
+	border-radius: var(--theme-card-radius, 20px);
+	border: var(--theme-card-border, 4px solid transparent);
 	box-sizing: border-box;
 }
 
 .imageContainer {
 	position: relative;
-	border-radius: 20px;
+	border-radius: var(--theme-card-radius, 20px);
 	overflow: hidden;
 
 	&::after {
