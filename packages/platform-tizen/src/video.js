@@ -3,6 +3,7 @@
  */
 /* global webapis */
 import {detectTizenVersion as _detectTizenVersion} from './deviceProfile';
+import {isExperimentalTruehdEnabled, probeTruehdCodecSupport} from './truehd';
 
 let isAVPlayAvailable = false;
 
@@ -63,11 +64,12 @@ const getDefaultCapabilities = () => {
 		ac3: true,
 		eac3: true,
 		truehd: false, // Not in Samsung specifications
+		truehdExperimental: false,
 		mkv: true,
 		nativeHls: true,
 		nativeHlsFmp4: true,
-    dts: false,
-    dtshd: false,
+		dts: false,
+		dtshd: false,
 		hlsAc3: true,
 		opus: true
 	};
@@ -107,6 +109,10 @@ export const getMediaCapabilities = async () => {
 				capabilities.dolbyVision = webapis.avinfo.isDolbyVisionSupport();
 			}
 		}
+
+		const truehdCodecSupported = probeTruehdCodecSupport();
+		capabilities.truehdExperimental = truehdCodecSupported === true;
+		capabilities.truehd = capabilities.truehdExperimental && isExperimentalTruehdEnabled();
 	} catch (e) {
 		console.warn('[tizenVideo] Failed to get capabilities:', e.message);
 	}
@@ -124,8 +130,8 @@ export const getSupportedAudioCodecs = (capabilities) => {
 	if (capabilities.opus) codecs.push('opus');
 	if (capabilities.dts) codecs.push('dts', 'dca');
 	if (capabilities.dts && capabilities.dtshd) codecs.push('dts-hd', 'dtshd');
+	if (capabilities.truehd) codecs.push('truehd', 'mlp');
 	// DTS: Samsung explicitly states not supported on any TV (2018-2025)
-	// TrueHD: Not documented in Samsung specifications
 	return codecs;
 };
 
@@ -160,7 +166,7 @@ export const getPlayMethod = (mediaSource, capabilities) => {
 	if (capabilities.vp9) supportedVideoCodecs.push('vp9');
 	if (capabilities.dolbyVision) supportedVideoCodecs.push('dvhe', 'dvh1');
 
-	// Audio codecs per Samsung spec tables — DTS and TrueHD intentionally excluded
+	// Audio codecs per Samsung spec tables. TrueHD is only added if experimental opt-in is enabled.
 	const supportedAudioCodecs = getSupportedAudioCodecs(capabilities);
 
 	// Check if ANY audio stream is compatible (not just the first/default one).
@@ -196,7 +202,7 @@ export const getPlayMethod = (mediaSource, capabilities) => {
 		: true;
 
 	// AV1 container support:
-	// Same as VP9 — the official Jellyfin client allows AV1 in MP4, MKV, and WebM.
+	// Same as VP9. The official Jellyfin client allows AV1 in MP4, MKV, and WebM.
 	// 8K Premium 2022+ models additionally support TS/AVI containers.
 	const av1GeneralContainers = capabilities.uhd8K && capabilities.tizenVersion >= 6.5;
 	const av1ContainerOk = videoCodec === 'av1'
@@ -352,8 +358,36 @@ export const keepScreenOn = async (enable) => {
 };
 
 export const getAudioOutputInfo = async () => {
-	// Tizen doesn't have a direct equivalent to LG's audio output info
-	return null;
+	const info = {
+		outputMode: null,
+		modelName: null,
+		firmware: null,
+		truehdCodecSupported: probeTruehdCodecSupport(),
+		passthroughGuaranteed: false,
+		notes: [
+			'Samsung Tizen APIs do not expose a guaranteed TrueHD/eARC passthrough control.',
+			'TrueHD support here is an experimental codec probe, not a passthrough guarantee.'
+		]
+	};
+
+	try {
+		if (typeof webapis !== 'undefined') {
+			if (typeof webapis.productinfo?.getModel === 'function') {
+				info.modelName = webapis.productinfo.getModel();
+			}
+			if (typeof webapis.productinfo?.getFirmware === 'function') {
+				info.firmware = webapis.productinfo.getFirmware();
+			}
+		}
+
+		if (typeof window !== 'undefined' && typeof window.tizen?.tvaudiocontrol?.getOutputMode === 'function') {
+			info.outputMode = window.tizen.tvaudiocontrol.getOutputMode();
+		}
+	} catch (e) {
+		info.error = e.message;
+	}
+
+	return info;
 };
 
 // AVPlay wrapper functions
@@ -540,7 +574,7 @@ export const avplayGetTracks = () => {
 export const avplaySelectTrack = (type, index) => {
 	if (!isAVPlayAvailable) return;
 	try {
-		// type: 'AUDIO' or 'TEXT' (subtitle) — per Samsung AVPlayStreamType enum
+		// type: 'AUDIO' or 'TEXT' (subtitle), per Samsung AVPlayStreamType enum
 		// Requires PLAYING or PAUSED state (not READY)
 		webapis.avplay.setSelectTrack(type, index);
 		console.log(`[tizenVideo] Selected ${type} track index: ${index}`);

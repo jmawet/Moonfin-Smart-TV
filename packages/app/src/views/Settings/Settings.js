@@ -11,6 +11,7 @@ import {useJellyseerr} from '../../context/JellyseerrContext';
 import {useDeviceInfo} from '../../hooks/useDeviceInfo';
 import serverLogger from '../../services/serverLogger';
 import connectionPool from '../../services/connectionPool';
+import {clearCapabilitiesCache} from '../../services/deviceProfile';
 import {isBackKey} from '../../utils/keys';
 import ClearDataDialog from '../../components/ClearDataDialog';
 import {clearAllStorage} from '../../services/storage';
@@ -462,6 +463,11 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 		[settings, updateSetting]
 	);
 
+	const toggleExperimentalTruehd = useCallback(() => {
+		updateSetting('experimentalTruehd', !settings.experimentalTruehd);
+		clearCapabilitiesCache();
+	}, [settings.experimentalTruehd, updateSetting]);
+
 	const handleOptionSelect = useCallback(
 		(settingKey, value) => {
 			updateSetting(settingKey, value);
@@ -613,10 +619,10 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 		</SpottableDiv>
 	);
 
-	const renderToggleItem = (settingKey, title, desc, iconName) => (
+	const renderToggleItem = (settingKey, title, desc, iconName, onToggle) => (
 		<SpottableDiv
 			className={css.listItem}
-			onClick={() => toggleSetting(settingKey)}
+			onClick={() => (onToggle ? onToggle() : toggleSetting(settingKey))}
 			spotlightId={`setting-${settingKey}`}
 		>
 			{renderSettingsIcon(iconName)}
@@ -692,6 +698,13 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 			{renderSliderItem('unpauseRewind', $L('Unpause Rewind'), 0, 10, 1, (v) => (v === 0 ? $L('Off') : `${v}s`), 'replay')}
 			{renderToggleItem('showDescriptionOnPause', $L('Show Description on Pause'), $L('Display item description when paused'), 'pausecircle')}
 			{renderToggleItem('stereoUpmixEnabled', $L('Stereo to Surround Upmix'), $L('Upmix stereo audio to 5.1 surround via server transcoding'), 'music')}
+			{renderToggleItem(
+				'experimentalTruehd',
+				$L('Experimental TrueHD Attempt'),
+				$L('May fall back to PCM, DD+, or AC3. Requires eARC + receiver. Not for TV speakers.'),
+				'speaker',
+				toggleExperimentalTruehd
+			)}
 			<div className={css.divider} />
 			{renderToggleItem('preferTranscode', $L('Prefer Transcoding'), $L('Request transcoded streams when available'), 'gear')}
 			{renderToggleItem(
@@ -1019,6 +1032,7 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 					'AAC',
 					capabilities?.ac3 && 'AC3',
 					capabilities?.eac3 && 'E-AC3',
+					capabilities?.truehd && 'TrueHD',
 					capabilities?.dts && 'DTS',
 					capabilities?.dtshd && 'DTS-HD',
 					capabilities?.dolbyAtmos && 'Atmos',
