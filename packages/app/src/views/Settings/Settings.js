@@ -698,13 +698,6 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 			{renderSliderItem('unpauseRewind', $L('Unpause Rewind'), 0, 10, 1, (v) => (v === 0 ? $L('Off') : `${v}s`), 'replay')}
 			{renderToggleItem('showDescriptionOnPause', $L('Show Description on Pause'), $L('Display item description when paused'), 'pausecircle')}
 			{renderToggleItem('stereoUpmixEnabled', $L('Stereo to Surround Upmix'), $L('Upmix stereo audio to 5.1 surround via server transcoding'), 'music')}
-			{renderToggleItem(
-				'experimentalTruehd',
-				$L('Experimental TrueHD Attempt'),
-				$L('May fall back to PCM, DD+, or AC3. Requires eARC + receiver. Not for TV speakers.'),
-				'speaker',
-				toggleExperimentalTruehd
-			)}
 			<div className={css.divider} />
 			{renderToggleItem('preferTranscode', $L('Prefer Transcoding'), $L('Request transcoded streams when available'), 'gear')}
 			{renderToggleItem(
@@ -872,8 +865,14 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 			{renderMissingItem('audio-night-mode', $L('Audio Night Mode'), undefined, 'light')}
 			{renderMissingItem('default-audio-language', $L('Default Audio Language'), undefined, 'language')}
 			{renderMissingItem('audio-behavior', $L('Audio Behavior'), undefined, 'sound')}
+			{renderToggleItem(
+				'experimentalTruehd',
+				$L('Experimental TrueHD Attempt'),
+				$L('May fall back to PCM, DD+, or AC3. Requires eARC + receiver. Not for TV speakers.'),
+				'speaker',
+				toggleExperimentalTruehd
+			)}
 			{renderMissingItem('ac3-passthrough', $L('AC3 Passthrough'), undefined, 'speaker')}
-			{renderMissingItem('truehd-support', $L('TrueHD Support'), undefined, 'speaker')}
 		</>
 	);
 
