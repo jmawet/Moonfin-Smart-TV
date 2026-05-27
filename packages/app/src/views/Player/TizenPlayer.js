@@ -350,6 +350,7 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 			onbufferingcomplete: () => { setIsBuffering(false); },
 			onstreamcompleted: () => { handleEndedCallbackRef.current?.(); },
 			onerror: (eventType) => {
+				if (isPaused || avplayGetState() === 'PAUSED') return;
 				console.error('[Player] AVPlay error:', eventType);
 				handleErrorCallbackRef.current?.();
 			},
@@ -383,7 +384,7 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 
 		// Start time update polling
 		startTimeUpdatePolling();
-	}, [startTimeUpdatePolling, stopTimeUpdatePolling, handleSubtitleChange, applyDisplayWindow]);
+	}, [startTimeUpdatePolling, stopTimeUpdatePolling, handleSubtitleChange, applyDisplayWindow, isPaused]);
 
 	// ==============================
 	// Initialization
@@ -723,11 +724,41 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 				}
 
 				// === Start AVPlay ===
+				console.log('[Player] avplayOpen URL:', result.url);
+				console.log('[Player] playMethod:', result.playMethod, 'mimeType:', result.mimeType, 'container:', result.mediaSource?.Container, 'transcodingContainer:', result.mediaSource?.TranscodingContainer);
 				avplayOpen(result.url);
 				applyDisplayWindow();
 
+				// Samsung AVPlay rejects some Jellyfin transcode endpoints with the
+				// default system User-Agent;
+				// PLAYER_ERROR_CONNECTION_FAILED on Tizen 6+ (i think). USER_AGENT first, USERAGENT fallback for older firmwares.
+				try {
+					avplaySetStreamingProperty('USER_AGENT', 'JellyfinTizenClient');
+				} catch {
+					try { avplaySetStreamingProperty('USERAGENT', 'JellyfinTizenClient'); } catch { /* ignore */ }
+				}
+
+				const videoStream = result.mediaSource?.MediaStreams?.find((s) => s.Type === 'Video');
+				const sourceWidth = videoStream?.Width || 0;
+				const sourceBitrate = result.mediaSource?.Bitrate || 0;
+				const is4K = sourceWidth > 1920 || sourceBitrate > 20000000;
+				const isTranscode = result.playMethod === 'Transcode';
+
+				if (isTranscode && is4K) {
+					try { avplaySetStreamingProperty('SET_MODE_4K', 'TRUE'); } catch { /* ignore */ }
+				}
+
 				if (isLiveTV || result.url.includes('.m3u8')) {
-					avplaySetStreamingProperty('ADAPTIVE_INFO', 'FIXED_MAX_RESOLUTION=1920x1080');
+					const maxRes = is4K ? '3840x2160' : '1920x1080';
+					const props = [
+						`FIXED_MAX_RESOLUTION=${maxRes}`,
+						'STARTBITRATE=HIGHEST',
+						'USER_AGENT=JellyfinTizenClient'
+					];
+					if (typeof effectiveBitrate !== 'undefined' && effectiveBitrate != null) {
+						props.push(`FIXED_MAX_BITRATE=${effectiveBitrate}`);
+					}
+					avplaySetStreamingProperty('ADAPTIVE_INFO', props.join('|'));
 				}
 
 				avplaySetListener({
@@ -764,15 +795,31 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 					runTimeRef.current = Math.floor(durationMs * 10000);
 				}
 
-				// Seek to start position if resuming
+				// Seek to start position if resuming. For HLS-transcode we defer the
+				// seek until AFTER play() has started — calling seekTo() in the READY
+				// state on a fresh HLS session yields PLAYER_ERROR_SEEK_FAILED.
+				const isHlsTranscode = result.playMethod === playback.PlayMethod.Transcode && result.url?.includes('.m3u8');
+				let deferredSeekMs = 0;
 				if (!isLiveTV && startPosition > 0) {
 					const seekMs = Math.floor(startPosition / 10000);
-					await avplaySeek(seekMs);
+					if (isHlsTranscode) {
+						deferredSeekMs = seekMs;
+					} else {
+						await avplaySeek(seekMs);
+					}
 				}
 
 				// Play - must be called BEFORE setSelectTrack, which requires PLAYING or PAUSED state
 				avplayPlay();
 				setIsPaused(false);
+
+				if (deferredSeekMs > 0) {
+					setTimeout(() => {
+						avplaySeek(deferredSeekMs).catch((e) => {
+							console.warn('[Player] Deferred HLS resume seek failed:', e?.message || e);
+						});
+					}, 1500);
+				}
 
 				// Apply pending track selections (AVPlay must be in PLAYING/PAUSED state)
 				const trackInfo = (pendingAudioIndex != null || pendingSubAction) ? avplayGetTracks() : [];
@@ -907,7 +954,7 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 			pendingSeekMsRef.current = null;
 		};
 	// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [item, resume, selectedQuality, settings.maxBitrate, settings.preferTranscode, settings.forceDirectPlay, settings.subtitleMode, settings.introAction, settings.outroAction, applyDisplayWindow]);
+	}, [item, resume, selectedQuality, settings.maxBitrate, settings.preferTranscode, settings.forceDirectPlay, settings.subtitleMode, settings.introAction, settings.outroAction]);
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return () => {};
@@ -1189,6 +1236,8 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 		if (state === 'PLAYING') {
 			avplayPause();
 			setIsPaused(true);
+			// Pause bug where the playe would thro erros when paused for longer
+			healthMonitorRef.current?.setPaused(true);
 			playback.reportProgress(positionRef.current, { isPaused: true, eventName: 'pause' });
 		} else if (state === 'PAUSED' || state === 'READY') {
 			const rewind = settings.unpauseRewind || 0;
@@ -1199,6 +1248,7 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 			}
 			avplayPlay();
 			setIsPaused(false);
+			healthMonitorRef.current?.setPaused(false);
 			playback.reportProgress(positionRef.current, { isPaused: false, eventName: 'unpause' });
 		}
 	}, [settings.unpauseRewind, isInGroup]);

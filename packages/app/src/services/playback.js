@@ -1,6 +1,7 @@
 import * as jellyfinApi from './jellyfinApi';
 import {getJellyfinDeviceProfile, getDeviceCapabilities} from './deviceProfile';
-import {getPlayMethod, getMimeType, findCompatibleAudioStreamIndex, getSupportedAudioCodecs} from './video';
+import {getPlayMethod, getMimeType, isAudioStreamPlayable} from './video';
+import {getFromStorage} from './storage';
 
 export const PlayMethod = {
 	DirectPlay: 'DirectPlay',
@@ -8,9 +9,46 @@ export const PlayMethod = {
 	Transcode: 'Transcode'
 };
 
+// This is for the TranscodeKillr Plugin witch needs a Tag or else the audio remux only will be killed aftr 10 seconds
+const isAudioOnlyRemuxTranscode = (mediaSource) => {
+	if (!mediaSource?.TranscodingUrl) return false;
+	const videoStream = (mediaSource.MediaStreams || []).find((s) => s.Type === 'Video');
+	if (!videoStream?.Codec) return false;
+	const match = mediaSource.TranscodingUrl.match(/[?&]VideoCodec=([^&]+)/i);
+	if (!match) return false;
+	const allowed = decodeURIComponent(match[1]).toLowerCase().split(',').map((c) => c.trim());
+	const sourceCodec = videoStream.Codec.toLowerCase();
+	return allowed.includes('copy') || allowed.includes(sourceCodec);
+};
+
 let currentSession = null;
 let progressInterval = null;
 let healthMonitor = null;
+
+const DEFAULT_PASSTHROUGH_SETTINGS = {
+	passthroughEnabled: true,
+	ac3Passthrough: true,
+	eac3Passthrough: true,
+	dtsPassthrough: true,
+	dtshdPassthrough: true,
+	truehdPassthrough: true
+};
+
+const getPlaybackAudioSettings = async (options = {}) => {
+	if (options.passthroughSettings) {
+		return {...DEFAULT_PASSTHROUGH_SETTINGS, ...options.passthroughSettings};
+	}
+
+	const stored = (await getFromStorage('settings')) || {};
+	return {
+		passthroughEnabled: options.passthroughEnabled ?? stored.passthroughEnabled ?? DEFAULT_PASSTHROUGH_SETTINGS.passthroughEnabled,
+		ac3Passthrough: options.ac3Passthrough ?? stored.ac3Passthrough ?? DEFAULT_PASSTHROUGH_SETTINGS.ac3Passthrough,
+		eac3Passthrough: options.eac3Passthrough ?? stored.eac3Passthrough ?? DEFAULT_PASSTHROUGH_SETTINGS.eac3Passthrough,
+		dtsPassthrough: options.dtsPassthrough ?? stored.dtsPassthrough ?? DEFAULT_PASSTHROUGH_SETTINGS.dtsPassthrough,
+		dtshdPassthrough: options.dtshdPassthrough ?? stored.dtshdPassthrough ?? DEFAULT_PASSTHROUGH_SETTINGS.dtshdPassthrough,
+		truehdPassthrough: options.truehdPassthrough ?? stored.truehdPassthrough ?? DEFAULT_PASSTHROUGH_SETTINGS.truehdPassthrough
+	};
+};
 
 // Cross-server support: get API instance based on item or options
 const getApiForItem = (item) => {
@@ -32,7 +70,7 @@ const getServerCredentials = (item) => {
 	return null;
 };
 
-const selectMediaSource = (mediaSources, capabilities, options) => {
+const selectMediaSource = (mediaSources, capabilities, options, passthroughSettings = DEFAULT_PASSTHROUGH_SETTINGS) => {
 	if (options.mediaSourceId) {
 		const source = mediaSources.find(s => s.Id === options.mediaSourceId);
 		if (source) return source;
@@ -40,7 +78,7 @@ const selectMediaSource = (mediaSources, capabilities, options) => {
 
 	const scored = mediaSources.map(source => {
 		let score = 0;
-		const playMethodResult = getPlayMethod(source, capabilities, options);
+		const playMethodResult = getPlayMethod(source, capabilities, options, passthroughSettings);
 
 		if (playMethodResult === PlayMethod.DirectPlay) score += 1000;
 		else if (playMethodResult === PlayMethod.DirectStream) score += 500;
@@ -63,9 +101,7 @@ const selectMediaSource = (mediaSources, capabilities, options) => {
 
 		// Score based on the best COMPATIBLE audio stream, not just the first one
 		const sourceAudioStreams = source.MediaStreams?.filter(s => s.Type === 'Audio') || [];
-		const sourceContainer = (source.Container || '').toLowerCase();
-		const supportedAudio = getSupportedAudioCodecs(capabilities, sourceContainer);
-		const compatibleAudio = sourceAudioStreams.filter(s => supportedAudio.includes((s.Codec || '').toLowerCase()));
+		const compatibleAudio = sourceAudioStreams.filter(s => isAudioStreamPlayable(s, capabilities, passthroughSettings));
 		if (compatibleAudio.length > 0) {
 			const bestAudio = compatibleAudio.reduce((best, s) => {
 				let trackScore = 0;
@@ -99,7 +135,7 @@ const selectMediaSource = (mediaSources, capabilities, options) => {
 	return scored[0].source;
 };
 
-const determinePlayMethod = (mediaSource, capabilities, options = {}) => {
+const determinePlayMethod = (mediaSource, capabilities, options = {}, passthroughSettings = DEFAULT_PASSTHROUGH_SETTINGS) => {
 	if (options.forceDirectPlay) return PlayMethod.DirectPlay;
 
 	const mediaStreams = mediaSource?.MediaStreams || [];
@@ -112,7 +148,7 @@ const determinePlayMethod = (mediaSource, capabilities, options = {}) => {
 		return PlayMethod.Transcode;
 	}
 
-	const computedMethod = getPlayMethod(mediaSource, capabilities, options);
+	const computedMethod = getPlayMethod(mediaSource, capabilities, options, passthroughSettings);
 	console.log('[playback] determinePlayMethod - computed:', computedMethod,
 		'serverDirectPlay:', mediaSource.SupportsDirectPlay,
 		'serverDirectStream:', mediaSource.SupportsDirectStream,
@@ -185,6 +221,9 @@ const buildPlaybackUrl = (itemId, mediaSource, playSessionId, playMethod, creden
 		if (options.stereoUpmixEnabled) {
 			transcodeUrl += (transcodeUrl.includes('?') ? '&' : '?') + 'upmix=true';
 		}
+
+		// If a video os alrady in progress a segmented stream response is given so a stratime is not needed
+		transcodeUrl = transcodeUrl.replace(/([?&])StartTimeTicks=[^&]*&?/i, '$1').replace(/[?&]$/, '');
 
 		const url = transcodeUrl.startsWith('http')
 			? transcodeUrl
@@ -262,8 +301,10 @@ const getAutoMaxBitrate = (capabilities) => {
 };
 
 export const getPlaybackInfo = async (itemId, options = {}) => {
-	const deviceProfile = options.deviceProfile || await getJellyfinDeviceProfile();
-	const capabilities = await getDeviceCapabilities();
+	const passthroughSettings = await getPlaybackAudioSettings(options);
+	const profileOptions = {...options, passthroughSettings};
+	const deviceProfile = options.deviceProfile || await getJellyfinDeviceProfile(profileOptions);
+	const capabilities = await getDeviceCapabilities(profileOptions);
 
 	// Cross-server: use item's server if available
 	const api = options.item ? getApiForItem(options.item) : jellyfinApi.api;
@@ -381,7 +422,7 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 	}
 	/* eslint-enable no-shadow */
 
-	let mediaSource = selectMediaSource(playbackInfo.MediaSources, capabilities, options);
+	let mediaSource = selectMediaSource(playbackInfo.MediaSources, capabilities, options, passthroughSettings);
 
 	// Auto-select a compatible audio stream to avoid unnecessary transcoding
 	let audioStreamIndex = options.audioStreamIndex;
@@ -390,40 +431,35 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 			s => s.Type === 'Audio' && s.Index === mediaSource.DefaultAudioStreamIndex
 		);
 		const defaultCodec = (defaultAudioStream?.Codec || '').toLowerCase();
-		const sourceContainer = (mediaSource.Container || '').toLowerCase();
-		const supportedAudio = getSupportedAudioCodecs(capabilities, sourceContainer);
+		const defaultPlayable = isAudioStreamPlayable(defaultAudioStream, capabilities, passthroughSettings);
 
-		if (defaultCodec && !supportedAudio.includes(defaultCodec)) {
-			const compatibleIndex = findCompatibleAudioStreamIndex(mediaSource, capabilities);
-			if (compatibleIndex >= 0) {
-				console.log(`[playback] Default audio track ${mediaSource.DefaultAudioStreamIndex} (${defaultCodec}) unsupported, auto-selecting compatible track ${compatibleIndex}`);
-				// Re-request playback info with the compatible audio stream so the server
-				// evaluates DirectPlay/DirectStream against the compatible track
-				const retryInfo = await api.getPlaybackInfo(itemId, {
-					DeviceProfile: deviceProfile,
-					StartTimeTicks: requestedStartTime,
-					AutoOpenLiveStream: true,
-					EnableDirectPlay: options.enableDirectPlay !== false,
-					EnableDirectStream: options.enableDirectStream !== false,
-					EnableTranscoding: options.enableTranscoding !== false,
-					AudioStreamIndex: compatibleIndex,
-					SubtitleStreamIndex: subtitleStreamIndex,
-					MaxStreamingBitrate: maxBitrate,
-					MediaSourceId: options.mediaSourceId || mediaSource.Id
-				});
-				if (retryInfo.MediaSources?.length) {
-					mediaSource = selectMediaSource(retryInfo.MediaSources, capabilities, options);
-					audioStreamIndex = compatibleIndex;
-					playbackInfo = retryInfo;
-					console.log(`[playback] Re-requested with audio track ${compatibleIndex}, play method: ${determinePlayMethod(mediaSource, capabilities)}`);
-				}
-			} else {
-				console.warn('[playback] No compatible audio track found \u2014 server will remux/transcode');
+		if (defaultAudioStream && !defaultPlayable) {
+			// Force Transcode if audio stream is unplayable
+			console.log(`[playback] Default audio (${defaultCodec}) unplayable \u2014 forcing transcode (audio-only remux, video copied)`);
+			const retryInfo = await api.getPlaybackInfo(itemId, {
+				DeviceProfile: deviceProfile,
+				StartTimeTicks: requestedStartTime,
+				AutoOpenLiveStream: true,
+				EnableDirectPlay: false,
+				EnableDirectStream: false,
+				EnableTranscoding: true,
+				AudioStreamIndex: mediaSource.DefaultAudioStreamIndex,
+				SubtitleStreamIndex: subtitleStreamIndex,
+				MaxStreamingBitrate: maxBitrate,
+				MediaSourceId: options.mediaSourceId || mediaSource.Id
+			});
+			if (retryInfo.MediaSources?.length) {
+				mediaSource = retryInfo.MediaSources[0];
+				audioStreamIndex = mediaSource.DefaultAudioStreamIndex;
+				playbackInfo = retryInfo;
+				mediaSource.SupportsDirectPlay = false;
+				mediaSource.SupportsDirectStream = false;
+				console.log(`[playback] After audio-remux retry \u2014 TranscodingUrl: ${mediaSource.TranscodingUrl ? 'present' : 'MISSING'}`);
 			}
 		}
 	}
 
-	let playMethod = determinePlayMethod(mediaSource, capabilities, options);
+	let playMethod = determinePlayMethod(mediaSource, capabilities, options, passthroughSettings);
 
 	// Log video stream info including HDR type
 	const videoStream = mediaSource.MediaStreams?.find(s => s.Type === 'Video');
@@ -482,12 +518,16 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 	const subtitleStreams = extractSubtitleStreams(mediaSource);
 	const chapters = extractChapters(mediaSource);
 
+	const audioOnlyRemux = playMethod === PlayMethod.Transcode && isAudioOnlyRemuxTranscode(mediaSource);
+	const reportedPlayMethod = audioOnlyRemux ? PlayMethod.DirectStream : playMethod;
+
 	currentSession = {
 		itemId,
 		playSessionId: playbackInfo.PlaySessionId,
 		mediaSourceId: mediaSource.Id,
 		mediaSource,
 		playMethod,
+		reportedPlayMethod,
 		startPositionTicks: options.startPositionTicks || 0,
 		capabilities,
 		audioStreamIndex: audioStreamIndex ?? mediaSource.DefaultAudioStreamIndex,
@@ -496,6 +536,9 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 		serverCredentials: creds
 	};
 
+	if (audioOnlyRemux) {
+		console.log(`[playback] Audio-only remux detected; reporting session as DirectStream (video=copy) for ${itemId}`);
+	}
 	console.log(`[playback] Playing ${itemId} via ${playMethod}`);
 
 	let mimeType;
@@ -834,7 +877,7 @@ export const reportStart = async (positionTicks = 0) => {
 			CanSeek: true,
 			IsPaused: false,
 			IsMuted: false,
-			PlayMethod: currentSession.playMethod,
+			PlayMethod: currentSession.reportedPlayMethod || currentSession.playMethod,
 			RepeatMode: 'RepeatNone'
 		});
 	} catch (e) {
@@ -863,7 +906,7 @@ export const reportProgress = async (positionTicks, options = {}) => {
 			CanSeek: true,
 			IsPaused: options.isPaused || false,
 			IsMuted: options.isMuted || false,
-			PlayMethod: currentSession.playMethod,
+			PlayMethod: currentSession.reportedPlayMethod || currentSession.playMethod,
 			AudioStreamIndex: currentSession.audioStreamIndex,
 			SubtitleStreamIndex: currentSession.subtitleStreamIndex
 		};
@@ -937,6 +980,14 @@ class PlaybackHealthMonitor {
 		this.bufferEvents = [];
 		this.lastProgressTime = Date.now();
 		this.isHealthy = true;
+		this.isPaused = false;
+	}
+
+	setPaused(paused) {
+		this.isPaused = paused;
+		if (paused) {
+			this.lastProgressTime = Date.now();
+		}
 	}
 
 	recordBuffer() {
@@ -961,6 +1012,9 @@ class PlaybackHealthMonitor {
 	}
 
 	checkHealth() {
+		if (this.isPaused) {
+			return true;
+		}
 		if (Date.now() - this.lastProgressTime > 30000) {
 			this.isHealthy = false;
 		}
