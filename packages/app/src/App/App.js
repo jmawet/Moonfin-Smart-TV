@@ -20,6 +20,7 @@ import NavBar from '../components/NavBar';
 import Sidebar from '../components/Sidebar';
 import AccountModal from '../components/AccountModal';
 import ExitDialog from '../components/ExitDialog';
+import AdminMessageDialog from '../components/AdminMessageDialog';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Screensaver from '../components/Screensaver';
 import SeasonalTheme from '../components/SeasonalTheme';
@@ -104,9 +105,19 @@ const PANELS = {
 
 const AppContent = (props) => {
 	const {isAuthenticated, isLoading, logout, serverUrl, serverName, api, user, hasMultipleServers, accessToken, connectionState, revalidateSession} = useAuth();
-	const {settings, activeTheme} = useSettings();
+	const {settings, activeTheme, serverMessage, showServerMessage, clearServerMessage} = useSettings();
 	const themeMusic = useThemeMusic();
-	const {openDialog: openSyncPlay, closeDialog: closeSyncPlay, isDialogOpen: syncPlayDialogOpen, playQueueItem, clearPlayQueueItem, isInGroup: isSyncPlayInGroup, setNewQueue: syncPlaySetNewQueue} = useSyncPlay();
+	const {
+		openDialog: openSyncPlay,
+		closeDialog: closeSyncPlay,
+		isDialogOpen: syncPlayDialogOpen,
+		playQueueItem,
+		clearPlayQueueItem,
+		isInGroup: isSyncPlayInGroup,
+		setNewQueue: syncPlaySetNewQueue,
+		displayMessage,
+		clearDisplayMessage
+	} = useSyncPlay();
 	const unifiedMode = settings.unifiedLibraryMode && hasMultipleServers;
 	const [panelIndex, setPanelIndex] = useState(PANELS.LOGIN);
 	const [selectedItem, setSelectedItem] = useState(null);
@@ -258,49 +269,34 @@ const AppContent = (props) => {
 	}, [panelIndex, selectedItem?.Id]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	const performAppCleanup = useCallback(() => {
-		console.log('[App] Performing app cleanup...');
-
-		// Stop any active playback reporting
 		playback.stopProgressReporting();
 		playback.stopHealthMonitoring();
-
-		// Try to report playback stopped if there was an active session
 		const session = playback.getCurrentSession();
 		if (session) {
 			try {
 				playback.reportStop(session.positionTicks || 0);
-			} catch (e) {
-				console.warn('[App] Failed to report stop during cleanup:', e);
-			}
+			} catch (_) {}
 		}
-
-		// Clean up any video elements to release hardware decoder
 		const videoElements = document.querySelectorAll('video');
 		videoElements.forEach(video => {
 			cleanupVideoElement(video);
 		});
-
-		console.log('[App] App cleanup complete');
 	}, []);
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return;
 
-		// Handle app being closed/hidden (beforeunload, pagehide)
 		const handleBeforeUnload = () => {
-			console.log('[App] beforeunload event - cleaning up');
 			performAppCleanup();
 		};
 
 		const handlePageHide = (event) => {
-			console.log('[App] pagehide event - persisted:', event.persisted);
 			if (!event.persisted) {
 				performAppCleanup();
 			}
 		};
 
 		const handleVisibilityHidden = () => {
-			console.log('[App] App hidden/suspended');
 			const videoElements = document.querySelectorAll('video');
 			videoElements.forEach(video => {
 				if (!video.paused) {
@@ -310,12 +306,10 @@ const AppContent = (props) => {
 		};
 
 		const handleVisibilityVisible = () => {
-			console.log('[App] App visible/resumed');
 			revalidateSession();
 		};
 
-		const handleRelaunch = (params) => {
-			console.log('[App] Platform relaunch event received:', params);
+		const handleRelaunch = () => {
 			performAppCleanup();
 			setPlayingItem(null);
 			setPanelHistory([]);
@@ -344,16 +338,9 @@ const AppContent = (props) => {
 			import('@moonfin/platform-tizen/smarthub').then(m => m.initSmartHub()).catch(() => {});
 		}
 
-		let handlePlatformLaunch;
-		if (isWebOS()) {
-			handlePlatformLaunch = () => console.log('[App] webOSLaunch event received');
-			document.addEventListener('webOSLaunch', handlePlatformLaunch);
-		}
-
 		cleanupHandlersRef.current = () => {
 			window.removeEventListener('beforeunload', handleBeforeUnload);
 			window.removeEventListener('pagehide', handlePageHide);
-			if (handlePlatformLaunch) document.removeEventListener('webOSLaunch', handlePlatformLaunch);
 			removeVisibilityHandler?.();
 			removeLifecycleHandler?.();
 		};
@@ -388,6 +375,12 @@ const AppContent = (props) => {
 			}
 		}
 	}, [isLoading, isAuthenticated, authChecked]);
+
+	useEffect(() => {
+		if (!displayMessage?.text) return;
+		showServerMessage(displayMessage.text);
+		clearDisplayMessage();
+	}, [displayMessage, showServerMessage, clearDisplayMessage]);
 
 	const navigateTo = useCallback((panel, addToHistory = true) => {
 		if (addToHistory && panelIndex !== PANELS.LOGIN) {
@@ -432,6 +425,11 @@ const AppContent = (props) => {
 					return;
 				}
 
+				if (serverMessage) {
+					clearServerMessage();
+					return;
+				}
+
 				if (showAccountModal) {
 					setShowAccountModal(false);
 					return;
@@ -464,7 +462,7 @@ const AppContent = (props) => {
 
 		window.addEventListener('keydown', handleKeyDown, true);
 		return () => window.removeEventListener('keydown', handleKeyDown, true);
-	}, [panelIndex, handleBack, performAppCleanup, showAccountModal, showExitDialog, showSettingsPanel]);
+	}, [panelIndex, handleBack, clearServerMessage, serverMessage, showAccountModal, showExitDialog, showSettingsPanel]);
 
 	const handleLoggedIn = useCallback(() => {
 		setPanelHistory([]);
@@ -473,7 +471,6 @@ const AppContent = (props) => {
 
 	const handleShuffle = useCallback(async () => {
 		try {
-			// Convert setting value to API format
 			const contentType = settings.shuffleContentType || 'both';
 			const includeItemTypes = contentType === 'movies' ? 'Movie'
 				: contentType === 'tv' ? 'Series'
@@ -481,7 +478,6 @@ const AppContent = (props) => {
 
 			let item;
 			if (unifiedMode) {
-				// Get random items from all servers
 				const items = await connectionPool.getRandomItemsFromAllServers(contentType, 1);
 				if (items.length > 0) {
 					item = items[0];
@@ -1036,6 +1032,11 @@ const AppContent = (props) => {
 				open={showExitDialog}
 				onCancel={handleCancelExitDialog}
 				onExit={performAppCleanup}
+			/>
+			<AdminMessageDialog
+				open={!!serverMessage}
+				message={serverMessage}
+				onDismiss={clearServerMessage}
 			/>
 			<SyncPlayDialog
 				open={syncPlayDialogOpen}

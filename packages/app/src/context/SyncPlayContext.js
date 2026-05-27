@@ -15,6 +15,7 @@ export const SyncPlayProvider = ({children}) => {
 	const [lastCommand, setLastCommand] = useState(null);
 	const [playQueueItem, setPlayQueueItem] = useState(null);
 	const [playQueue, setPlayQueue] = useState(null);
+	const [displayMessage, setDisplayMessage] = useState(null);
 	const listenerRef = useRef(null);
 
 	useEffect(() => {
@@ -49,6 +50,9 @@ export const SyncPlayProvider = ({children}) => {
 					break;
 				case 'playbackCommand':
 					setLastCommand(data);
+					break;
+				case 'displayMessage':
+					setDisplayMessage(data);
 					break;
 				case 'playQueue': {
 					setPlayQueue(data);
@@ -126,8 +130,10 @@ export const SyncPlayProvider = ({children}) => {
 		isInGroup: !!group,
 		isDialogOpen,
 		lastCommand,
+		displayMessage,
 		playQueueItem,
 		playQueue,
+		clearDisplayMessage: useCallback(() => setDisplayMessage(null), []),
 		clearPlayQueueItem: useCallback(() => setPlayQueueItem(null), []),
 		refreshGroups,
 		getGroup: syncPlayService.getGroup,

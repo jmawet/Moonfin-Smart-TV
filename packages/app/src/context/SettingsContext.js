@@ -284,6 +284,7 @@ const SettingsContext = createContext(null);
 
 export function SettingsProvider({children}) {
 	const [settings, setSettings] = useState(defaultSettings);
+	const [serverMessage, setServerMessage] = useState('');
 	const [loaded, setLoaded] = useState(false);
 	const [themeCatalogVersion, setThemeCatalogVersion] = useState(0);
 	const serverCredsRef = useRef(null);
@@ -372,6 +373,17 @@ export function SettingsProvider({children}) {
 		saveToStorage('settings', defaultSettings);
 	}, []);
 
+	const showServerMessage = useCallback((message) => {
+		if (typeof message !== 'string') return;
+		const trimmed = message.trim();
+		if (!trimmed) return;
+		setServerMessage(trimmed);
+	}, []);
+
+	const clearServerMessage = useCallback(() => {
+		setServerMessage('');
+	}, []);
+
 	const runStreamSync = useCallback(async (serverUrl, token) => {
 		if (streamSyncInFlightRef.current) {
 			streamSyncQueuedRef.current = true;
@@ -416,6 +428,11 @@ export function SettingsProvider({children}) {
 			serverUrl,
 			token,
 			(event) => {
+				if (event?.type === 'adminMessage') {
+					showServerMessage(event?.text);
+					return;
+				}
+
 				if (event?.type !== 'settingsUpdated') return;
 				sseReconnectAttemptRef.current = 0;
 				runStreamSync(serverUrl, token).catch(() => {});
@@ -450,7 +467,7 @@ export function SettingsProvider({children}) {
 				}, delayMs);
 			}
 		);
-	}, [runStreamSync, stopSettingsStream]);
+	}, [runStreamSync, showServerMessage, stopSettingsStream]);
 
 	const syncFromServer = useCallback(async (serverUrl, token) => {
 		try {
@@ -544,6 +561,7 @@ export function SettingsProvider({children}) {
 	return (
 		<SettingsContext.Provider value={{
 			settings,
+			serverMessage,
 			loaded,
 			availableThemes,
 			activeThemeId,
@@ -552,6 +570,8 @@ export function SettingsProvider({children}) {
 			updateSettings,
 			selectThemeById,
 			resetSettings,
+			showServerMessage,
+			clearServerMessage,
 			syncFromServer
 		}}>
 			{children}
