@@ -1,6 +1,12 @@
 import {createContext, useContext, useState, useEffect, useCallback, useMemo, useRef} from 'react';
 import {getFromStorage, saveToStorage} from '../services/storage';
-import {getMoonfinSettings, getMoonfinThemes, saveMoonfinProfile, moonfinPing} from '../services/jellyseerrApi';
+import {
+	getMoonfinSettings,
+	getMoonfinThemes,
+	saveMoonfinProfile,
+	moonfinPing,
+	subscribeMoonfinSettingsStream
+} from '../services/jellyseerrApi';
 import {parseThemeSpec} from '../theme/themeSpec';
 import {getAvailableThemeList, getAvailableThemes, isBuiltInThemeId, replaceCustomThemes, resolveThemeById} from '../theme/themeRegistry';
 
@@ -51,16 +57,26 @@ const defaultSettings = {
 	featuredContentType: 'both',
 	featuredItemCount: 10,
 	showFeaturedBar: true,
+	mediaBarMode: 'moonfin',
 	featuredTrailerPreview: true,
 	featuredTrailerMuted: false,
+	mediaBarAutoAdvance: true,
+	mediaBarIntervalMs: 10000,
 	mediaBarSourceType: 'library',
 	mediaBarLibraryIds: [],
 	mediaBarCollectionIds: [],
+	mediaBarExcludedGenres: [],
 	unifiedLibraryMode: false,
 	useMoonfinPlugin: false,
 	mdblistEnabled: true,
+	mdblistApiKey: '',
 	mdblistRatingSources: ['imdb', 'tmdb', 'tomatoes', 'metacritic'],
+	mdblistShowRatingBadges: false,
+	tmdbApiKey: '',
 	tmdbEpisodeRatingsEnabled: true,
+	jellyseerrEnabled: false,
+	jellyseerrApiKey: '',
+	jellyseerrBlockNsfw: false,
 	showClock: true,
 	clockDisplay: '24-hour',
 	autoLogin: true,
@@ -90,6 +106,9 @@ const defaultSettings = {
 	screensaverAgeFilter: false,
 	screensaverMaxRating: 13,
 	uiScale: 1.0,
+	enableFolderView: false,
+	episodePreviewEnabled: true,
+	previewAudioEnabled: true,
 	enablePgsRendering: true,
 	showSyncPlayButton: true,
 	stereoUpmixEnabled: false,
@@ -111,9 +130,12 @@ const SERVER_TO_LOCAL = {
 	seasonalSurprise: 'seasonalTheme',
 	detailsScreenBlur: 'backdropBlurDetail',
 	browsingBlur: 'backdropBlurHome',
-	use24HourClock: 'clockDisplay',
+	watchedIndicator: 'watchedIndicatorBehavior',
+	cardFocusExpansion: 'cardFocusZoom',
+	backdropEnabled: 'showHomeBackdrop',
+	mediaBarTrailerAudio: 'featuredTrailerMuted',
+	focusColor: 'focusBorderColor',
 	homeRowOrder: 'homeRows',
-	theme: 'visualTheme',
 };
 const LOCAL_TO_SERVER = Object.fromEntries(
 	Object.entries(SERVER_TO_LOCAL).map(([s, l]) => [l, s])
@@ -131,9 +153,9 @@ const normalizeGuid = (id) => {
 const normalizeGuidArray = (arr) => Array.isArray(arr) ? arr.map(normalizeGuid) : arr;
 
 const VALUE_CONVERSIONS = {
-	clockDisplay: {
-		toServer: v => v === '24-hour',
-		fromServer: v => v ? '24-hour' : '12-hour'
+	featuredTrailerMuted: {
+		toServer: v => !v,
+		fromServer: v => !v
 	},
 	mediaBarLibraryIds: {
 		fromServer: normalizeGuidArray
@@ -176,12 +198,20 @@ const SYNCABLE_KEYS = [
 	'visualTheme', 'customThemeId',
 	'showRatingLabels',
 	'themeMusicEnabled', 'themeMusicVolume', 'themeMusicOnHomeRows',
-	'homeRowsImageType', 'showClock', 'clockDisplay',
+	'homeRowsImageType',
+	'watchedIndicatorBehavior',
+	'cardFocusZoom',
+	'showHomeBackdrop',
 	'backdropBlurHome', 'backdropBlurDetail',
-	'mediaBarSourceType', 'mediaBarLibraryIds', 'mediaBarCollectionIds',
+	'mediaBarMode', 'mediaBarAutoAdvance', 'mediaBarIntervalMs',
+	'featuredTrailerMuted',
+	'mediaBarSourceType', 'mediaBarLibraryIds', 'mediaBarCollectionIds', 'mediaBarExcludedGenres',
+	'mdblistApiKey', 'mdblistShowRatingBadges', 'tmdbApiKey',
+	'jellyseerrEnabled', 'jellyseerrApiKey', 'jellyseerrBlockNsfw',
+	'enableFolderView',
+	'episodePreviewEnabled', 'previewAudioEnabled',
 	'homeRows',
 	'showSyncPlayButton',
-	'uiLanguage',
 	'blockedRatings',
 	'jellyseerrRows',
 	'focusBorderColor',
@@ -236,9 +266,7 @@ const resolveFromEnvelope = (envelope, adminDefaults) => {
 const pushTvProfile = (updated, credsRef) => {
 	if (!credsRef.current) return;
 	const {serverUrl, token} = credsRef.current;
-	saveMoonfinProfile('tv', localToProfile(updated), serverUrl, token).catch(e =>
-		console.warn('[Settings] Failed to push TV profile:', e.message)
-	);
+	saveMoonfinProfile('tv', localToProfile(updated), serverUrl, token).catch(() => {});
 };
 
 const extractThemeObjects = (payload) => {
@@ -259,6 +287,13 @@ export function SettingsProvider({children}) {
 	const [loaded, setLoaded] = useState(false);
 	const [themeCatalogVersion, setThemeCatalogVersion] = useState(0);
 	const serverCredsRef = useRef(null);
+	const pluginEnabledRef = useRef(false);
+	const syncFromServerRef = useRef(null);
+	const sseControllerRef = useRef(null);
+	const sseReconnectTimerRef = useRef(null);
+	const sseReconnectAttemptRef = useRef(0);
+	const streamSyncInFlightRef = useRef(false);
+	const streamSyncQueuedRef = useRef(false);
 
 	useEffect(() => {
 		getFromStorage('settings').then((stored) => {
@@ -337,31 +372,111 @@ export function SettingsProvider({children}) {
 		saveToStorage('settings', defaultSettings);
 	}, []);
 
+	const runStreamSync = useCallback(async (serverUrl, token) => {
+		if (streamSyncInFlightRef.current) {
+			streamSyncQueuedRef.current = true;
+			return;
+		}
+
+		streamSyncInFlightRef.current = true;
+		try {
+			do {
+				streamSyncQueuedRef.current = false;
+				const sync = syncFromServerRef.current;
+				if (!sync) return;
+				await sync(serverUrl, token);
+			} while (streamSyncQueuedRef.current && pluginEnabledRef.current);
+		} finally {
+			streamSyncInFlightRef.current = false;
+		}
+	}, []);
+
+	const stopSettingsStream = useCallback(({resetBackoff = true} = {}) => {
+		if (sseReconnectTimerRef.current) {
+			clearTimeout(sseReconnectTimerRef.current);
+			sseReconnectTimerRef.current = null;
+		}
+
+		if (sseControllerRef.current && typeof sseControllerRef.current.abort === 'function') {
+			sseControllerRef.current.abort();
+		}
+		sseControllerRef.current = null;
+		if (resetBackoff) {
+			sseReconnectAttemptRef.current = 0;
+		}
+		streamSyncQueuedRef.current = false;
+		streamSyncInFlightRef.current = false;
+	}, []);
+
+	const connectSettingsStream = useCallback((serverUrl, token) => {
+		if (!pluginEnabledRef.current || !serverUrl || !token) return;
+		if (sseControllerRef.current) return;
+
+		sseControllerRef.current = subscribeMoonfinSettingsStream(
+			serverUrl,
+			token,
+			(event) => {
+				if (event?.type !== 'settingsUpdated') return;
+				sseReconnectAttemptRef.current = 0;
+				runStreamSync(serverUrl, token).catch(() => {});
+			},
+			(error) => {
+				stopSettingsStream({resetBackoff: false});
+
+				const message = String(error?.message || '');
+				if (/not supported/i.test(message)) {
+					return;
+				}
+
+				if (!pluginEnabledRef.current) return;
+
+				const delayMs = Math.min(
+					30000,
+					1000 * (2 ** sseReconnectAttemptRef.current),
+				);
+				sseReconnectAttemptRef.current = Math.min(
+					sseReconnectAttemptRef.current + 1,
+					6,
+				);
+
+				sseReconnectTimerRef.current = setTimeout(() => {
+					sseReconnectTimerRef.current = null;
+					if (!pluginEnabledRef.current) return;
+
+					const creds = serverCredsRef.current;
+					if (!creds) return;
+
+					connectSettingsStream(creds.serverUrl, creds.token);
+				}, delayMs);
+			}
+		);
+	}, [runStreamSync, stopSettingsStream]);
+
 	const syncFromServer = useCallback(async (serverUrl, token) => {
 		try {
 			serverCredsRef.current = {serverUrl, token};
+			sseReconnectAttemptRef.current = 0;
+			if (pluginEnabledRef.current) {
+				connectSettingsStream(serverUrl, token);
+			}
 
 			let adminDefaults = null;
 			try {
 				const ping = await moonfinPing(serverUrl, token);
 				if (ping?.defaultSettings) adminDefaults = ping.defaultSettings;
-			} catch (e) { /* non-critical */ }
+			} catch (_) {}
 
 			let themesPayload = null;
 			try {
 				themesPayload = await getMoonfinThemes(serverUrl, token);
-			} catch (e) {
-				console.warn('[Settings] Theme sync failed:', e.message);
-			}
+			} catch (_) {}
 
 			const specs = [];
 			for (const entry of extractThemeObjects(themesPayload)) {
 				if (!entry || typeof entry !== 'object') continue;
 				try {
 					specs.push(parseThemeSpec(entry));
-				} catch (e) {
-					console.warn('[Settings] Ignoring malformed theme entry:', e.message);
-				}
+				} catch (_) {}
 			}
 			replaceCustomThemes(specs);
 			setThemeCatalogVersion((value) => value + 1);
@@ -399,10 +514,32 @@ export function SettingsProvider({children}) {
 				return updated;
 			});
 
-		} catch (e) {
-			console.warn('[Settings] Server sync failed:', e.message);
+		} catch (_) {}
+	}, [connectSettingsStream]);
+
+	useEffect(() => {
+		syncFromServerRef.current = syncFromServer;
+	}, [syncFromServer]);
+
+	useEffect(() => {
+		pluginEnabledRef.current = settings.useMoonfinPlugin;
+	}, [settings.useMoonfinPlugin]);
+
+	useEffect(() => {
+		if (!settings.useMoonfinPlugin) {
+			stopSettingsStream();
+			return;
 		}
-	}, []);
+
+		const creds = serverCredsRef.current;
+		if (creds) {
+			connectSettingsStream(creds.serverUrl, creds.token);
+		}
+	}, [settings.useMoonfinPlugin, connectSettingsStream, stopSettingsStream]);
+
+	useEffect(() => () => {
+		stopSettingsStream();
+	}, [stopSettingsStream]);
 
 	return (
 		<SettingsContext.Provider value={{

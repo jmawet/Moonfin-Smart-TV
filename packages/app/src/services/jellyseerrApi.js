@@ -419,6 +419,97 @@ throw error;
 return true;
 };
 
+export const subscribeMoonfinSettingsStream = (serverUrl, token, onEvent, onError) => {
+const sUrl = (serverUrl || jellyfinServerUrl || '').replace(/\/+$/, '');
+const sToken = token || jellyfinAccessToken;
+if (!sUrl || !sToken) {
+throw new Error('Server URL and token required');
+}
+
+let closed = false;
+const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+
+const emitError = (error) => {
+if (closed) return;
+if (error?.name === 'AbortError') return;
+if (typeof onError === 'function') {
+onError(error);
+}
+};
+
+const run = async () => {
+try {
+const response = await fetch(`${sUrl}/Moonfin/Settings/Stream`, {
+method: 'GET',
+headers: {
+'Accept': 'text/event-stream',
+'Authorization': `MediaBrowser Token="${sToken}"`
+},
+signal: controller?.signal
+});
+
+if (!response.ok) {
+const error = new Error(`Moonfin settings stream failed: ${response.status}`);
+error.status = response.status;
+throw error;
+}
+
+if (!response.body || typeof response.body.getReader !== 'function') {
+throw new Error('Moonfin settings stream is not supported on this device');
+}
+
+const reader = response.body.getReader();
+const decoder = new TextDecoder();
+let buffer = '';
+
+while (!closed) {
+const {value, done} = await reader.read();
+if (done) break;
+
+buffer += decoder.decode(value, {stream: true});
+const lines = buffer.split('\n');
+buffer = lines.pop() || '';
+
+for (const rawLine of lines) {
+const line = rawLine.trimEnd();
+if (!line.startsWith('data:')) continue;
+
+const payload = line.slice(5).trim();
+if (!payload) continue;
+
+try {
+const parsed = JSON.parse(payload);
+if (typeof onEvent === 'function') {
+onEvent(parsed);
+}
+} catch (error) {
+console.warn('[Jellyseerr] Ignoring malformed Moonfin stream payload:', error.message);
+}
+}
+}
+
+if (!closed) {
+emitError(new Error('Moonfin settings stream closed'));
+}
+} catch (error) {
+emitError(error);
+}
+};
+
+run();
+
+return {
+abort: () => {
+closed = true;
+try {
+controller?.abort();
+} catch (error) {
+void error;
+}
+}
+};
+};
+
 export const getMoonfinMediaBar = async (serverUrl, token, profile = 'tv') => {
 	const sUrl = serverUrl || jellyfinServerUrl;
 	const sToken = token || jellyfinAccessToken;
@@ -751,6 +842,7 @@ getMoonfinConfig,
 getMoonfinSettings,
 getMoonfinThemes,
 saveMoonfinProfile,
+subscribeMoonfinSettingsStream,
 getUser,
 PERMISSIONS,
 hasPermission,
