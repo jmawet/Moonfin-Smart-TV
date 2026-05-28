@@ -189,7 +189,6 @@ export const parseThemeSpec = (json) => {
 	if (!displayName) {
 		throw new Error('Theme displayName is required.');
 	}
-	const brightness = json.brightness === 'light' ? 'light' : 'dark';
 	const colorsSource = json.colors;
 	if (!colorsSource || typeof colorsSource !== 'object') {
 		throw new Error('Theme colors are required.');
@@ -206,7 +205,6 @@ export const parseThemeSpec = (json) => {
 		schemaVersion,
 		id,
 		displayName,
-		brightness,
 		fontFamily: typeof json.fontFamily === 'string' && json.fontFamily.trim() ? json.fontFamily.trim() : null,
 		textGlow: parseShadowList(json.textGlow, 'textGlow'),
 		navColorCycle: Array.isArray(json.navColorCycle)

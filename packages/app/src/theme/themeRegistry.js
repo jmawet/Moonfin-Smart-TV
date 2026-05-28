@@ -4,7 +4,6 @@ const moonfinTheme = parseThemeSpec({
 	schemaVersion: 1,
 	id: 'moonfin',
 	displayName: 'Moonfin',
-	brightness: 'dark',
 	colors: {
 		background: '#FF101010',
 		onBackground: '#FFFFFFFF',
@@ -51,7 +50,6 @@ const neonPulseTheme = parseThemeSpec({
 	schemaVersion: 1,
 	id: 'neon_pulse',
 	displayName: 'Neon Pulse',
-	brightness: 'dark',
 	fontFamily: 'NeonPulseDisplay',
 	textGlow: [{color: '#6600E5FF', blurRadius: 8, spreadRadius: 0, offsetX: 0, offsetY: 0}],
 	navColorCycle: ['#FFFF2E92', '#FF00E5FF'],
