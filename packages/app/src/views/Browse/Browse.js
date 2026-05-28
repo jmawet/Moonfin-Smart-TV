@@ -12,6 +12,7 @@ import {getMoonfinMediaBar} from '../../services/jellyseerrApi';
 import {toCssColor} from '../../theme/themeSpec';
 import DetailSection from './DetailSection';
 import FeaturedBanner from './FeaturedBanner';
+import MakdBanner from './MakdBanner';
 import BackdropLayer from './BackdropLayer';
 
 import css from './Browse.module.less';
@@ -1342,19 +1343,33 @@ const Browse = ({
 				/>
 
 				{featuredItems.length > 0 && settings.showFeaturedBar !== false && (
-					<FeaturedBanner
-						isVisible={browseMode === 'featured'}
-						featuredItems={featuredItems}
-						serverUrl={serverUrl}
-						settings={settings}
-						getItemServerUrl={getItemServerUrl}
-						onSelectItem={handleSelectItem}
-						onNavigateDown={handleNavigateDownFromFeatured}
-						onFeaturedFocus={handleFeaturedFocusCallback}
-						uiPanelStyle={uiPanelStyle}
-						uiButtonStyle={uiButtonStyle}
-						onCurrentItemChange={setCurrentFeaturedItem}
-					/>
+					settings.featuredBarStyle === 'makd' ? (
+						<MakdBanner
+							isVisible={browseMode === 'featured'}
+							featuredItems={featuredItems}
+							serverUrl={serverUrl}
+							settings={settings}
+							getItemServerUrl={getItemServerUrl}
+							onSelectItem={handleSelectItem}
+							onNavigateDown={handleNavigateDownFromFeatured}
+							onFeaturedFocus={handleFeaturedFocusCallback}
+							onCurrentItemChange={setCurrentFeaturedItem}
+						/>
+					) : (
+						<FeaturedBanner
+							isVisible={browseMode === 'featured'}
+							featuredItems={featuredItems}
+							serverUrl={serverUrl}
+							settings={settings}
+							getItemServerUrl={getItemServerUrl}
+							onSelectItem={handleSelectItem}
+							onNavigateDown={handleNavigateDownFromFeatured}
+							onFeaturedFocus={handleFeaturedFocusCallback}
+							uiPanelStyle={uiPanelStyle}
+							uiButtonStyle={uiButtonStyle}
+							onCurrentItemChange={setCurrentFeaturedItem}
+						/>
+					)
 				)}
 
 				<DetailSection

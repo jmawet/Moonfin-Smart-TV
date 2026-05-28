@@ -161,6 +161,11 @@ const getContentTypeOptions = () => [
 	{ value: 'tv', label: $L('TV Shows Only') }
 ];
 
+const getFeaturedBarStyleOptions = () => [
+	{ value: 'moonfin', label: $L('Moonfin') },
+	{ value: 'makd', label: $L('MakD') }
+];
+
 const getFeaturedItemCountOptions = () => [
 	{ value: 5, label: $L('5 items') },
 	{ value: 10, label: $L('10 items') },
@@ -1263,6 +1268,7 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 	const renderDisplayFeatured = () => ( // eslint-disable-line no-unused-vars
 		<>
 			{renderToggleItem('showFeaturedBar', $L('Show Featured Bar'), $L('Display the featured media bar on home screen'))}
+			{renderOptionItem('featuredBarStyle', $L('Bar Style'), getFeaturedBarStyleOptions(), $L('Moonfin'))}
 			{renderOptionItem('featuredContentType', $L('Content Type'), getContentTypeOptions(), $L('Movies & TV Shows'))}
 			{renderOptionItem('featuredItemCount', $L('Item Count'), getFeaturedItemCountOptions(), $L('10 items'))}
 			{renderOptionItem('mediaBarSourceType', $L('Source'), getMediaBarSourceOptions(), $L('Libraries'))}
@@ -1447,6 +1453,7 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 	const renderDynamicMediaBar = () => (
 		<>
 			{renderToggleItem('showFeaturedBar', $L('Media Bar Mode'), $L('Toggle media bar visibility'), 'movies')}
+			{renderOptionItem('featuredBarStyle', $L('Bar Style'), getFeaturedBarStyleOptions(), $L('Moonfin'), 'appscontents')}
 			{renderOptionItem('featuredContentType', $L('Content Type'), getContentTypeOptions(), $L('Movies & TV Shows'), 'list')}
 			{renderOptionItem('featuredItemCount', $L('Item Count'), getFeaturedItemCountOptions(), $L('10 items'), 'list')}
 			{renderNavItem('sourceLibraries', $L('Source Libraries'), $L('Choose source libraries for media bar'), () => {}, 'folder')}

@@ -328,7 +328,7 @@ export const buildThemeCssVars = (theme) => ({
 	'--theme-font-family': theme.fontFamily || 'inherit',
 	'--theme-nav-surface': theme.transparentNavbarSurface ? 'transparent' : toCssColor(theme.colors.surface),
 	'--theme-nav-color-1': theme.navColorCycle[0] ? toCssColor(theme.navColorCycle[0]) : toCssColor(theme.colors.onSurface),
-	'--theme-nav-color-2': theme.navColorCycle[1] ? toCssColor(theme.navColorCycle[1]) : toCssColor(theme.colors.accent),
+	'--theme-nav-color-2': theme.navColorCycle[1] ? toCssColor(theme.navColorCycle[1]) : toCssColor(theme.colors.onSurface),
 	'--theme-status-available': toCssColor(theme.semantic.statusAvailable),
 	'--theme-status-available-20': toCssColorWithAlpha(theme.semantic.statusAvailable, 0.2),
 	'--theme-status-requested': toCssColor(theme.semantic.statusRequested),
