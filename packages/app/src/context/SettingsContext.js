@@ -9,7 +9,16 @@ const DEFAULT_HOME_ROWS = [
 	{id: 'nextup', name: 'Next Up', enabled: true, order: 1},
 	{id: 'latest-media', name: 'Latest Media', enabled: true, order: 2},
 	{id: 'collections', name: 'Collections', enabled: false, order: 3},
-	{id: 'library-tiles', name: 'My Media', enabled: false, order: 4}
+	{id: 'library-tiles', name: 'My Media', enabled: false, order: 4},
+	{id: 'favoriteMovies', name: 'Favorite Movies', enabled: false, order: 5},
+	{id: 'favoriteSeries', name: 'Favorite Series', enabled: false, order: 6},
+	{id: 'favoriteEpisodes', name: 'Favorite Episodes', enabled: false, order: 7},
+	{id: 'favoritePeople', name: 'Favorite People', enabled: false, order: 8},
+	{id: 'favoriteArtists', name: 'Favorite Artists', enabled: false, order: 9},
+	{id: 'favoriteMusicVideos', name: 'Favorite Music Videos', enabled: false, order: 10},
+	{id: 'favoriteAlbums', name: 'Favorite Albums', enabled: false, order: 11},
+	{id: 'favoriteSongs', name: 'Favorite Songs', enabled: false, order: 12},
+	{id: 'genres', name: 'Genres', enabled: false, order: 13}
 ];
 
 const defaultSettings = {
@@ -37,6 +46,14 @@ const defaultSettings = {
 	visualTheme: 'moonfin',
 	customThemeId: '',
 	homeRows: DEFAULT_HOME_ROWS,
+	pluginSections: [],
+	displayFavoritesRows: false,
+	displayCollectionsRows: false,
+	displayGenresRows: false,
+	favoritesRowSortBy: 'SortName',
+	collectionsRowSortBy: 'SortName',
+	genresRowSortBy: 'SortName',
+	genresRowItemFilter: 'all',
 	showShuffleButton: true,
 	shuffleContentType: 'both',
 	showGenresButton: true,
@@ -122,8 +139,47 @@ const LOCAL_TO_SERVER = Object.fromEntries(
 	Object.entries(SERVER_TO_LOCAL).map(([s, l]) => [l, s])
 );
 
-const TV_TO_SERVER_ROW = {'latest-media': 'latestmedia', 'library-tiles': 'smalllibrarytiles'};
-const SERVER_TO_TV_ROW = {'latestmedia': 'latest-media', 'smalllibrarytiles': 'library-tiles'};
+const TV_TO_SERVER_ROW = {
+	'latest-media': 'latestmedia',
+	'library-tiles': 'smalllibrarytiles',
+	'favoriteMovies': 'favoritemovies',
+	'favoriteSeries': 'favoriteseries',
+	'favoriteEpisodes': 'favoriteepisodes',
+	'favoritePeople': 'favoritepeople',
+	'favoriteArtists': 'favoriteartists',
+	'favoriteMusicVideos': 'favoritemusicvideos',
+	'favoriteAlbums': 'favoritealbums',
+	'favoriteSongs': 'favoritesongs',
+	'genres': 'genres'
+};
+const SERVER_TO_TV_ROW = {
+	'latestmedia': 'latest-media',
+	'smalllibrarytiles': 'library-tiles',
+	'favoritemovies': 'favoriteMovies',
+	'favoriteseries': 'favoriteSeries',
+	'favoriteepisodes': 'favoriteEpisodes',
+	'favoritepeople': 'favoritePeople',
+	'favoriteartists': 'favoriteArtists',
+	'favoriteMusicVideos': 'favoriteMusicVideos',
+	'favoritemusicvideos': 'favoriteMusicVideos',
+	'favoritealbums': 'favoriteAlbums',
+	'favoritesongs': 'favoriteSongs',
+	'genres': 'genres'
+};
+
+const mergeHomeRows = (rows) => {
+	if (!Array.isArray(rows)) return [...DEFAULT_HOME_ROWS];
+	const merged = [...rows];
+	let added = false;
+	for (const def of DEFAULT_HOME_ROWS) {
+		if (!merged.find((row) => row.id === def.id)) {
+			merged.push({...def, enabled: false, order: merged.length});
+			added = true;
+		}
+	}
+	if (!added) return rows;
+	return merged;
+};
 
 const normalizeGuid = (id) => {
 	if (!id || typeof id !== 'string') return id;
@@ -180,6 +236,8 @@ const SYNCABLE_KEYS = [
 	'showRatingLabels',
 	'themeMusicEnabled', 'themeMusicVolume', 'themeMusicOnHomeRows',
 	'homeRowsImageType', 'showClock', 'clockDisplay',
+	'displayFavoritesRows', 'displayCollectionsRows', 'displayGenresRows',
+	'favoritesRowSortBy', 'collectionsRowSortBy', 'genresRowSortBy', 'genresRowItemFilter',
 	'backdropBlurHome', 'backdropBlurDetail',
 	'mediaBarSourceType', 'mediaBarLibraryIds', 'mediaBarCollectionIds',
 	'homeRows',
@@ -268,6 +326,15 @@ export function SettingsProvider({children}) {
 		getFromStorage('settings').then((stored) => {
 			if (stored) {
 				let migrated = false;
+				const mergedHomeRows = mergeHomeRows(stored.homeRows);
+				if (mergedHomeRows !== stored.homeRows) {
+					stored.homeRows = mergedHomeRows;
+					migrated = true;
+				}
+				if (!Array.isArray(stored.pluginSections)) {
+					stored.pluginSections = [];
+					migrated = true;
+				}
 				if (!stored.visualTheme) {
 					stored.visualTheme = 'moonfin';
 					migrated = true;

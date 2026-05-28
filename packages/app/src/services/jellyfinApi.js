@@ -169,8 +169,8 @@ export const api = {
 	getLatest: (libraryId, limit = 20) =>
 		request(`/Users/${currentUser}/Items/Latest?ParentId=${libraryId}&Limit=${limit}&Fields=ImageTags,ParentThumbItemId,ParentBackdropItemId&ImageTypeLimit=1&GroupItems=true`),
 
-	getCollections: (limit = 50) =>
-		request(`/Users/${currentUser}/Items?IncludeItemTypes=BoxSet&Recursive=true&SortBy=SortName&SortOrder=Ascending&Limit=${limit}&Fields=PrimaryImageAspectRatio,ProductionYear`),
+	getCollections: (limit = 50, sortBy = 'SortName', sortOrder = 'Ascending') =>
+		request(`/Users/${currentUser}/Items?IncludeItemTypes=BoxSet&Recursive=true&SortBy=${encodeURIComponent(sortBy)}&SortOrder=${encodeURIComponent(sortOrder)}&Limit=${limit}&Fields=PrimaryImageAspectRatio,ProductionYear`),
 
 	getResumeItems: (limit = 12) =>
 		request(`/Users/${currentUser}/Items/Resume?Limit=${limit}&MediaTypes=Video&Fields=ImageTags,ParentThumbItemId,ParentBackdropItemId`),
@@ -221,10 +221,35 @@ export const api = {
 	getSimilar: (itemId, limit = 12) =>
 		request(`/Items/${itemId}/Similar?UserId=${currentUser}&Limit=${limit}&Fields=PrimaryImageAspectRatio,ProductionYear`),
 
-	getGenres: (libraryId) => {
+	getGenres: (libraryId, includeItemTypes = 'Movie,Series', sortBy = 'SortName', sortOrder = 'Ascending') => {
 		const params = libraryId ? `&ParentId=${libraryId}` : '';
-		return request(`/Genres?UserId=${currentUser}&SortBy=SortName&Recursive=true&IncludeItemTypes=Movie,Series${params}`);
+		return request(`/Genres?UserId=${currentUser}&SortBy=${encodeURIComponent(sortBy)}&SortOrder=${encodeURIComponent(sortOrder)}&Recursive=true&IncludeItemTypes=${encodeURIComponent(includeItemTypes)}${params}`);
 	},
+
+	getInstalledPlugins: () => request('/Plugins'),
+
+	getHomeScreenMeta: () => request('/HomeScreen/Meta'),
+
+	getHomeScreenSections: (language = null) => {
+		const params = [`UserId=${currentUser}`];
+		if (language) {
+			params.push(`Language=${encodeURIComponent(String(language))}`);
+		}
+		return request(`/HomeScreen/Sections?${params.join('&')}`);
+	},
+
+	getHomeScreenSectionContent: (sectionType, additionalData = null, language = null) => {
+		const params = [`UserId=${currentUser}`];
+		if (additionalData !== null && additionalData !== undefined && String(additionalData) !== '') {
+			params.push(`AdditionalData=${encodeURIComponent(String(additionalData))}`);
+		}
+		if (language) {
+			params.push(`Language=${encodeURIComponent(String(language))}`);
+		}
+		return request(`/HomeScreen/Section/${encodeURIComponent(String(sectionType))}?${params.join('&')}`);
+	},
+
+	getKefinTweaksConfig: () => request('/KefinTweaks/ClientConfig'),
 
 	getMusicGenres: (params = {}) => {
 		const merged = {UserId: currentUser, SortBy: 'SortName', SortOrder: 'Ascending', Recursive: 'true'};
@@ -492,9 +517,9 @@ export const createApiForServer = (serverUrl, token, userId) => {
 			return serverRequest(`/Users/${userId}/Items?${query}`);
 		},
 
-		getGenres: (libraryId) => {
+		getGenres: (libraryId, includeItemTypes = 'Movie,Series', sortBy = 'SortName', sortOrder = 'Ascending') => {
 			const params = libraryId ? `&ParentId=${libraryId}` : '';
-			return serverRequest(`/Genres?UserId=${userId}&SortBy=SortName&Recursive=true&IncludeItemTypes=Movie,Series${params}`);
+			return serverRequest(`/Genres?UserId=${userId}&SortBy=${encodeURIComponent(sortBy)}&SortOrder=${encodeURIComponent(sortOrder)}&Recursive=true&IncludeItemTypes=${encodeURIComponent(includeItemTypes)}${params}`);
 		},
 
 		getMusicGenres: (params = {}) => {
@@ -517,6 +542,9 @@ export const createApiForServer = (serverUrl, token, userId) => {
 			if (libraryId) endpoint += `&ParentId=${libraryId}`;
 			return serverRequest(endpoint);
 		},
+
+		getCollections: (limit = 50, sortBy = 'SortName', sortOrder = 'Ascending') =>
+			serverRequest(`/Users/${userId}/Items?IncludeItemTypes=BoxSet&Recursive=true&SortBy=${encodeURIComponent(sortBy)}&SortOrder=${encodeURIComponent(sortOrder)}&Limit=${limit}&Fields=PrimaryImageAspectRatio,ProductionYear`),
 
 		getRandomItems: (contentType = 'both', limit = 10) => {
 			let includeTypes;
@@ -550,6 +578,31 @@ export const createApiForServer = (serverUrl, token, userId) => {
 
 		getPlaybackInfo: (itemId) =>
 			serverRequest(`/Items/${itemId}/PlaybackInfo?UserId=${userId}`),
+
+		getInstalledPlugins: () => serverRequest('/Plugins'),
+
+		getHomeScreenMeta: () => serverRequest('/HomeScreen/Meta'),
+
+		getHomeScreenSections: (language = null) => {
+			const params = [`UserId=${userId}`];
+			if (language) {
+				params.push(`Language=${encodeURIComponent(String(language))}`);
+			}
+			return serverRequest(`/HomeScreen/Sections?${params.join('&')}`);
+		},
+
+		getHomeScreenSectionContent: (sectionType, additionalData = null, language = null) => {
+			const params = [`UserId=${userId}`];
+			if (additionalData !== null && additionalData !== undefined && String(additionalData) !== '') {
+				params.push(`AdditionalData=${encodeURIComponent(String(additionalData))}`);
+			}
+			if (language) {
+				params.push(`Language=${encodeURIComponent(String(language))}`);
+			}
+			return serverRequest(`/HomeScreen/Section/${encodeURIComponent(String(sectionType))}?${params.join('&')}`);
+		},
+
+		getKefinTweaksConfig: () => serverRequest('/KefinTweaks/ClientConfig'),
 
 		searchRemoteSubtitles: (itemId, language = 'eng', isPerfectMatch = null) => {
 			const query = isPerfectMatch === null ? '' : `?IsPerfectMatch=${isPerfectMatch}`;

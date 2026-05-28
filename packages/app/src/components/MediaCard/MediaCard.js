@@ -10,6 +10,15 @@ const SpottableDiv = Spottable('div');
 const POSTER_SIZE_MULTIPLIERS = {small: 0.8, default: 1, large: 1.2, xlarge: 1.4};
 const BASE_SIZES = {portrait: [240, 360], landscape: [384, 216], square: [240, 240]};
 
+const toAbsoluteImageUrl = (url, serverUrl) => {
+	if (!url || typeof url !== 'string') return null;
+	if (url.startsWith('http://') || url.startsWith('https://')) return url;
+	if (url.startsWith('//')) return `https:${url}`;
+	if (!serverUrl) return url;
+	if (url.startsWith('/')) return `${serverUrl}${url}`;
+	return `${serverUrl}/${url}`;
+};
+
 const MediaCard = ({item, serverUrl, cardType = 'portrait', onSelect, onFocusItem, showServerBadge = false, showOverview = false, eagerLoad = false, spotlightId, onSpotlightLeft, onSpotlightRight}) => {
 	const {settings} = useSettings();
 	const isLandscape = cardType === 'landscape';
@@ -30,6 +39,7 @@ const MediaCard = ({item, serverUrl, cardType = 'portrait', onSelect, onFocusIte
 
 	const imageUrl = useMemo(() => {
 		const imageType = settings.homeRowsImageType || 'poster';
+		const providerIds = item.ProviderIds || {};
 
 		if (isLandscape && item.Type === 'Episode') {
 			if (settings.useSeriesThumbnails && item.SeriesId && item.SeriesPrimaryImageTag) {
@@ -77,8 +87,18 @@ const MediaCard = ({item, serverUrl, cardType = 'portrait', onSelect, onFocusIte
 			return getImageUrl(itemServerUrl, item.AlbumId, 'Primary', {maxHeight: 300, quality: 80});
 		}
 
+		const externalPoster = item._externalPosterUrl ||
+			providerIds.JellyseerrPoster ||
+			providerIds.SonarrPoster ||
+			providerIds.RadarrPoster ||
+			providerIds.LidarrPoster ||
+			providerIds.ReadarrPoster;
+		if (externalPoster) {
+			return toAbsoluteImageUrl(externalPoster, itemServerUrl);
+		}
+
 		return null;
-	}, [isLandscape, item.Type, item.ImageTags?.Primary, item.ImageTags?.Thumb, item.ImageTags?.Logo, item.Id, item.ParentThumbItemId, item.ParentBackdropItemId, item.BackdropImageTags, item.ParentLogoItemId, item.AlbumId, item.AlbumPrimaryImageTag, item.SeriesId, item.SeriesPrimaryImageTag, itemServerUrl, settings.homeRowsImageType, settings.useSeriesThumbnails]);
+	}, [isLandscape, item.Type, item.ImageTags?.Primary, item.ImageTags?.Thumb, item.ImageTags?.Logo, item.Id, item.ParentThumbItemId, item.ParentBackdropItemId, item.BackdropImageTags, item.ParentLogoItemId, item.AlbumId, item.AlbumPrimaryImageTag, item.SeriesId, item.SeriesPrimaryImageTag, item.ProviderIds, item._externalPosterUrl, itemServerUrl, settings.homeRowsImageType, settings.useSeriesThumbnails]);
 
 	const handleClick = useCallback(() => {
 		onSelect?.(item);

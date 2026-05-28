@@ -275,8 +275,6 @@ const AppContent = (props) => {
 		videoElements.forEach(video => {
 			cleanupVideoElement(video);
 		});
-
-		console.log('[App] App cleanup complete');
 	}, []);
 
 	useEffect(() => {
@@ -284,19 +282,16 @@ const AppContent = (props) => {
 
 		// Handle app being closed/hidden (beforeunload, pagehide)
 		const handleBeforeUnload = () => {
-			console.log('[App] beforeunload event - cleaning up');
 			performAppCleanup();
 		};
 
 		const handlePageHide = (event) => {
-			console.log('[App] pagehide event - persisted:', event.persisted);
 			if (!event.persisted) {
 				performAppCleanup();
 			}
 		};
 
 		const handleVisibilityHidden = () => {
-			console.log('[App] App hidden/suspended');
 			const videoElements = document.querySelectorAll('video');
 			videoElements.forEach(video => {
 				if (!video.paused) {
@@ -306,12 +301,10 @@ const AppContent = (props) => {
 		};
 
 		const handleVisibilityVisible = () => {
-			console.log('[App] App visible/resumed');
 			revalidateSession();
 		};
 
-		const handleRelaunch = (params) => {
-			console.log('[App] Platform relaunch event received:', params);
+		const handleRelaunch = () => {
 			performAppCleanup();
 			setPlayingItem(null);
 			setPanelHistory([]);
@@ -340,16 +333,9 @@ const AppContent = (props) => {
 			import('@moonfin/platform-tizen/smarthub').then(m => m.initSmartHub()).catch(() => {});
 		}
 
-		let handlePlatformLaunch;
-		if (isWebOS()) {
-			handlePlatformLaunch = () => console.log('[App] webOSLaunch event received');
-			document.addEventListener('webOSLaunch', handlePlatformLaunch);
-		}
-
 		cleanupHandlersRef.current = () => {
 			window.removeEventListener('beforeunload', handleBeforeUnload);
 			window.removeEventListener('pagehide', handlePageHide);
-			if (handlePlatformLaunch) document.removeEventListener('webOSLaunch', handlePlatformLaunch);
 			removeVisibilityHandler?.();
 			removeLifecycleHandler?.();
 		};
@@ -664,6 +650,12 @@ const AppContent = (props) => {
 		navigateTo(PANELS.LIBRARY);
 	}, [navigateTo]);
 
+	const handleSelectGenreFromBrowse = useCallback((genre) => {
+		if (!genre?.name) return;
+		setSelectedGenre(genre);
+		navigateTo(PANELS.GENRE_BROWSE);
+	}, [navigateTo]);
+
 	const handleSelectPerson = useCallback((person) => {
 		setSelectedPerson(person);
 		navigateTo(PANELS.PERSON);
@@ -861,7 +853,8 @@ const AppContent = (props) => {
 						<Browse
 							onSelectItem={handleSelectItem}
 							onSelectLibrary={handleSelectLibrary}
-							isVisible={panelIndex === PANELS.BROWSE}
+							onSelectGenre={handleSelectGenreFromBrowse}
+							isVisible={panelIndex === PANELS.BROWSE && !showSettingsPanel}
 							onFocusItemThemeMusic={themeMusic.playThemeMusicDelayed}
 							onBlurItemThemeMusic={themeMusic.cancelDelayed}
 							onLeaveThemeMusic={themeMusic.stopThemeMusic}

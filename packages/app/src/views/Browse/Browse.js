@@ -33,6 +33,105 @@ let lastFocusState = null;
 
 const EXCLUDED_COLLECTION_TYPES = ['livetv', 'boxsets', 'books', 'musicvideos', 'homevideos', 'photos'];
 
+const FAVORITE_ROW_CONFIGS = [
+	{id: 'favoriteMovies', title: 'Favorite Movies', includeItemTypes: 'Movie', type: 'portrait'},
+	{id: 'favoriteSeries', title: 'Favorite Series', includeItemTypes: 'Series', type: 'portrait'},
+	{id: 'favoriteEpisodes', title: 'Favorite Episodes', includeItemTypes: 'Episode', type: 'landscape'},
+	{id: 'favoritePeople', title: 'Favorite People', includeItemTypes: 'Person', type: 'portrait'},
+	{id: 'favoriteArtists', title: 'Favorite Artists', includeItemTypes: 'MusicArtist', type: 'square'},
+	{id: 'favoriteMusicVideos', title: 'Favorite Music Videos', includeItemTypes: 'MusicVideo', type: 'landscape'},
+	{id: 'favoriteAlbums', title: 'Favorite Albums', includeItemTypes: 'MusicAlbum', type: 'square'},
+	{id: 'favoriteSongs', title: 'Favorite Songs', includeItemTypes: 'Audio', type: 'square'}
+];
+
+const FAVORITE_ROW_IDS = FAVORITE_ROW_CONFIGS.map((row) => row.id);
+
+const getSortOrderFromSortBy = (sortBy) => {
+	if (sortBy === 'SortName') return 'Ascending';
+	if (sortBy === 'Random') return 'Ascending';
+	return 'Descending';
+};
+
+const getGenresIncludeTypes = (filter) => {
+	if (filter === 'Movie') return 'Movie';
+	if (filter === 'Series') return 'Series';
+	return 'Movie,Series';
+};
+
+const parsePluginSpec = (specJson) => {
+	if (!specJson) return null;
+	try {
+		return JSON.parse(specJson);
+	} catch (e) {
+		return null;
+	}
+};
+
+const EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
+
+const getResultItems = (result) => {
+	if (Array.isArray(result)) return result;
+	if (Array.isArray(result?.Items)) return result.Items;
+	if (Array.isArray(result?.items)) return result.items;
+	return [];
+};
+
+const getHssProviderIds = (item) => {
+	if (item?.ProviderIds && typeof item.ProviderIds === 'object') return item.ProviderIds;
+	if (item?.providerIds && typeof item.providerIds === 'object') return item.providerIds;
+	return {};
+};
+
+const normalizeHssItemId = (item, sectionType, additionalData, index) => {
+	const rawId = item?.Id || item?.id || '';
+	const normalizedRawId = String(rawId).trim();
+	if (normalizedRawId && normalizedRawId !== EMPTY_GUID) {
+		return normalizedRawId;
+	}
+
+	const providerIds = getHssProviderIds(item);
+	const syntheticSource =
+		providerIds.Jellyseerr ||
+		providerIds.SonarrSeriesId ||
+		providerIds.RadarrMovieId ||
+		providerIds.LidarrAlbumId ||
+		providerIds.ReadarrBookId ||
+		item?.Name ||
+		item?.OriginalTitle ||
+		index;
+
+	const sectionToken = String(sectionType || 'section').toLowerCase().replace(/[^a-z0-9_-]+/g, '-');
+	const additionalToken = String(additionalData || 'default').toLowerCase().replace(/[^a-z0-9_-]+/g, '-');
+	const sourceToken = String(syntheticSource).toLowerCase().replace(/[^a-z0-9_-]+/g, '-');
+
+	return `hss-${sectionToken}-${additionalToken}-${sourceToken}-${index}`;
+};
+
+const getHssPosterUrl = (item) => {
+	const providerIds = getHssProviderIds(item);
+	return (
+		providerIds.JellyseerrPoster ||
+		providerIds.SonarrPoster ||
+		providerIds.RadarrPoster ||
+		providerIds.LidarrPoster ||
+		providerIds.ReadarrPoster ||
+		null
+	);
+};
+
+const normalizeHssItems = (items, sectionType, additionalData) => {
+	if (!Array.isArray(items) || items.length === 0) return [];
+	return items.map((item, index) => {
+		const normalizedId = normalizeHssItemId(item, sectionType, additionalData, index);
+		const posterUrl = getHssPosterUrl(item);
+		return {
+			...item,
+			Id: normalizedId,
+			_externalPosterUrl: item?._externalPosterUrl || posterUrl || null
+		};
+	});
+};
+
 const browseInitialState = {
 	isLoading: true,
 	browseMode: 'featured',
@@ -99,6 +198,7 @@ const stripItemForCache = (item) => ({
 const Browse = ({
 	onSelectItem,
 	onSelectLibrary,
+	onSelectGenre,
 	isVisible = true,
 	onFocusItemThemeMusic,
 	onBlurItemThemeMusic,
@@ -118,6 +218,7 @@ const Browse = ({
 	const wasVisibleRef = useRef(true);
 	const prevFilteredRowsRef = useRef([]);
 	const filteredRowsLengthRef = useRef(0);
+	const filteredRowsRef = useRef([]);
 	const rowRefsMap = useRef(new Map());
 	const initialFocusSetRef = useRef(false);
 	const scrollTimeoutRef = useRef(null);
@@ -283,8 +384,23 @@ const Browse = ({
 		return [...(settings.homeRows || [])].sort((a, b) => a.order - b.order);
 	}, [settings.homeRows]);
 
+	const pluginSectionsConfig = useMemo(() => {
+		return [...(settings.pluginSections || [])].sort((a, b) => a.order - b.order);
+	}, [settings.pluginSections]);
+
+	const isRowVisibleByGates = useCallback((rowId) => {
+		if (FAVORITE_ROW_IDS.includes(rowId)) return settings.displayFavoritesRows;
+		if (rowId === 'collections') return settings.displayCollectionsRows;
+		if (rowId === 'genres') return settings.displayGenresRows;
+		return true;
+	}, [settings.displayFavoritesRows, settings.displayCollectionsRows, settings.displayGenresRows]);
+
 	const filteredRows = useMemo(() => {
 		const enabledRowIds = homeRowsConfig.filter(r => r.enabled).map(r => r.id);
+		const enabledPluginIds = pluginSectionsConfig.filter((section) => section.enabled).map((section) => section.id);
+		const rowOrderMap = new Map();
+		homeRowsConfig.forEach((row) => rowOrderMap.set(row.id, row.order));
+		pluginSectionsConfig.forEach((section, index) => rowOrderMap.set(section.id, (section.order ?? index) + 1000));
 
 		let result;
 
@@ -352,11 +468,13 @@ const Browse = ({
 				}
 			}
 
-			result = result.filter(row =>
-				row.id === 'continue-nextup' ||
-				enabledRowIds.includes(row.id) ||
-				(row.isLatestRow && enabledRowIds.includes('latest-media'))
-			);
+			result = result.filter((row) => {
+				if (row.id === 'continue-nextup') return true;
+				if (row.isPluginRow) return enabledPluginIds.includes(row.id);
+				if (!isRowVisibleByGates(row.id)) return false;
+				if (row.isLatestRow) return enabledRowIds.includes('latest-media');
+				return enabledRowIds.includes(row.id);
+			});
 		} else {
 			const resumeRow = allRowData.find(r => r.id === 'resume');
 			const resumeItemIds = new Set((resumeRow?.items || []).map(item => item.Id));
@@ -371,23 +489,32 @@ const Browse = ({
 				})
 				.filter(row => {
 					if (!row) return false;
+					if (row.isPluginRow) {
+						return enabledPluginIds.includes(row.id);
+					}
 					if (row.id === 'resume' || row.id === 'nextup') {
 						return enabledRowIds.includes(row.id);
 					}
 					if (row.isLatestRow) {
 						return enabledRowIds.includes('latest-media');
 					}
+					if (!isRowVisibleByGates(row.id)) {
+						return false;
+					}
 					return enabledRowIds.includes(row.id);
 				});
 		}
 
 		// Re-translate titles so cached rows pick up the current locale
+		const favoriteLabelMap = new Map(FAVORITE_ROW_CONFIGS.map((row) => [row.id, $L(row.title)]));
 		result = result.map(row => {
 			let title;
 			if (row.id === 'resume' || row.id === 'continue-nextup') title = $L('Continue Watching');
 			else if (row.id === 'nextup') title = $L('Next Up');
 			else if (row.id === 'library-tiles') title = $L('My Media');
 			else if (row.id === 'collections') title = $L('Collections');
+			else if (row.id === 'genres') title = $L('Genres');
+			else if (favoriteLabelMap.has(row.id)) title = favoriteLabelMap.get(row.id);
 			else if (row.isLatestRow && row.library) {
 				const libName = row.library._serverName
 					? `${row.library.Name} (${row.library._serverName})`
@@ -396,6 +523,29 @@ const Browse = ({
 			}
 			return title && title !== row.title ? {...row, title} : row;
 		});
+
+		const resumeOrder = rowOrderMap.get('resume');
+		const nextUpOrder = rowOrderMap.get('nextup');
+		const continueOrder = Math.min(
+			Number.isFinite(resumeOrder) ? resumeOrder : Number.MAX_SAFE_INTEGER,
+			Number.isFinite(nextUpOrder) ? nextUpOrder : Number.MAX_SAFE_INTEGER
+		);
+
+		result = result
+			.map((row, index) => {
+				let order = rowOrderMap.get(row.id);
+				if (row.id === 'continue-nextup') {
+					order = Number.isFinite(continueOrder) ? continueOrder : 0;
+				} else if (row.isLatestRow) {
+					order = rowOrderMap.get('latest-media');
+				}
+				if (!Number.isFinite(order)) {
+					order = row.isPluginRow ? 2000 + index : 1000 + index;
+				}
+				return {row, index, order};
+			})
+			.sort((left, right) => left.order - right.order || left.index - right.index)
+			.map((entry) => entry.row);
 
 		const prev = prevFilteredRowsRef.current;
 		if (prev.length === result.length) {
@@ -417,7 +567,22 @@ const Browse = ({
 
 		prevFilteredRowsRef.current = result;
 		return result;
-	}, [allRowData, homeRowsConfig, settings.mergeContinueWatchingNextUp]);
+	}, [allRowData, homeRowsConfig, pluginSectionsConfig, settings.mergeContinueWatchingNextUp, isRowVisibleByGates]);
+
+	const focusRow = useCallback((rowIndex) => {
+		const row = filteredRowsRef.current[rowIndex];
+		const firstItemId = row?.items?.[0]?.Id;
+		const keyPrefix = row?.id || rowIndex;
+
+		if (firstItemId !== undefined && firstItemId !== null) {
+			const firstCardSpotlightId = `media-${keyPrefix}-${firstItemId}`;
+			if (Spotlight.focus(firstCardSpotlightId)) {
+				return true;
+			}
+		}
+
+		return Spotlight.focus('row-' + rowIndex);
+	}, []);
 
 	const scrollToRow = useCallback((rowIndex, thenFocus) => {
 		if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
@@ -425,19 +590,26 @@ const Browse = ({
 		const targetRow = rowRefsMap.current.get(rowIndex);
 		const container = contentRowsRef.current;
 		if (!targetRow || !container) {
-			if (thenFocus) Spotlight.focus('row-' + rowIndex);
+			if (thenFocus) focusRow(rowIndex);
 			return;
 		}
 
 		container.scrollTop = targetRow.offsetTop;
 
-		// Focus after scroll so the browser's focus-scroll is a no-op
 		if (thenFocus) {
-			scrollTimeoutRef.current = setTimeout(function () {
-				Spotlight.focus('row-' + rowIndex);
-			}, 0);
+			let attempts = 0;
+			const tryFocus = () => {
+				attempts += 1;
+				if (focusRow(rowIndex)) {
+					return;
+				}
+				if (attempts < 6) {
+					scrollTimeoutRef.current = setTimeout(tryFocus, 16);
+				}
+			};
+			scrollTimeoutRef.current = setTimeout(tryFocus, 0);
 		}
-	}, []);
+	}, [focusRow]);
 
 	const handleNavigateUp = useCallback((fromRowIndex) => {
 		if (fromRowIndex === 0) {
@@ -453,6 +625,7 @@ const Browse = ({
 		scrollToRow(targetIndex, true);
 	}, [settings.showFeaturedBar, settings.navbarPosition, scrollToRow]);
 
+	filteredRowsRef.current = filteredRows;
 	filteredRowsLengthRef.current = filteredRows.length;
 
 	const handleNavigateDown = useCallback((fromRowIndex) => {
@@ -490,6 +663,7 @@ const Browse = ({
 	}, [isVisible, isLoading, filteredRows.length, fetchFreshFeaturedItems, refreshVolatileData, settings.showFeaturedBar, featuredItems.length, scrollToRow]);
 
 	useEffect(() => {
+		if (!isVisible) return;
 		if (!isLoading && !initialFocusSetRef.current) {
 			setTimeout(() => {
 				if (lastFocusState || initialFocusSetRef.current) {
@@ -504,7 +678,7 @@ const Browse = ({
 				}
 			}, FOCUS_DELAY_MS);
 		}
-	}, [isLoading, featuredItems.length, filteredRows.length, settings.showFeaturedBar]);
+	}, [isVisible, isLoading, featuredItems.length, filteredRows.length, settings.showFeaturedBar]);
 
 	useEffect(() => {
 		cachedRowData = null;
@@ -516,7 +690,6 @@ const Browse = ({
 
 	useEffect(() => {
 		const handleBrowseRefresh = () => {
-			console.log('[Browse] Received refresh event - clearing caches');
 			cachedRowData = null;
 			cachedLibraries = null;
 			cachedFeaturedItems = null;
@@ -568,15 +741,19 @@ const Browse = ({
 
 	useEffect(() => {
 		const loadData = async () => {
-			// In unified mode, skip cache and always fetch fresh from all servers
-			if (unifiedMode) {
+			const hasDynamicRowConfig =
+				settings.displayFavoritesRows ||
+				settings.displayCollectionsRows ||
+				settings.displayGenresRows ||
+				(settings.pluginSections || []).some((section) => section?.enabled);
+
+			if (hasDynamicRowConfig || unifiedMode) {
 				dispatch({type: 'SET_LOADING', value: true});
 				await fetchAllData(); // eslint-disable-line no-use-before-define
 				return;
 			}
 
 			if (cachedRowData && cachedLibraries && cachedFeaturedItems && isCacheValid(cacheTimestamp, CACHE_TTL_VOLATILE)) {
-				console.log('[Browse] Using in-memory cache');
 				dispatch({type: 'SET_ROW_DATA', rowData: cachedRowData});
 				await fetchFreshFeaturedItems(cachedFeaturedItems);
 				dispatch({type: 'SET_LOADING', value: false});
@@ -587,7 +764,6 @@ const Browse = ({
 			const hasValidPersistedCache = persistedCache && isCacheValid(persistedCache.timestamp, CACHE_TTL_LIBRARIES);
 
 			if (hasValidPersistedCache) {
-				console.log('[Browse] Using persisted cache, will refresh in background');
 				dispatch({type: 'SET_ROW_DATA', rowData: persistedCache.rowData});
 				await fetchFreshFeaturedItems(persistedCache.featuredItems);
 				cachedLibraries = persistedCache.libraries;
@@ -595,15 +771,13 @@ const Browse = ({
 				cacheTimestamp = persistedCache.timestamp;
 				dispatch({type: 'SET_LOADING', value: false});
 
-				// If volatile data is stale, refresh in background
 				if (!isCacheValid(persistedCache.timestamp, CACHE_TTL_VOLATILE)) {
-					console.log('[Browse] Volatile cache stale, refreshing in background');
 					refreshVolatileData();
 				}
 				return;
 			}
 
-				dispatch({type: 'SET_LOADING', value: true});
+			dispatch({type: 'SET_LOADING', value: true});
 			await fetchAllData(); // eslint-disable-line no-use-before-define
 		};
 
@@ -701,16 +875,245 @@ const Browse = ({
 					return true;
 				});
 
-				let latestResults, collectionsResult;
+				let latestResults;
+				let collectionsResult = null;
+				let favoriteResults = [];
+				let genresResult = null;
+				let pluginRows = [];
+
+				const fetchPluginSectionRow = async (section) => {
+					if (!section?.enabled) return null;
+					const spec = parsePluginSpec(section.specJson);
+					if (!spec || typeof spec !== 'object') return null;
+					const limit = Number.isFinite(Number(spec.limit)) ? Number(spec.limit) : 20;
+					const title = section.name || section.displayText || $L('Plugin Section');
+					const fields = 'PrimaryImageAspectRatio,ProductionYear,ImageTags,UserData,SeriesPrimaryImageTag,AlbumArtist,AlbumId,AlbumPrimaryImageTag';
+
+					try {
+						let items = [];
+						switch (spec.kind) {
+							case 'recentlyReleasedMovies': {
+								const result = await api.getItems({
+									IncludeItemTypes: 'Movie',
+									SortBy: 'PremiereDate',
+									SortOrder: 'Descending',
+									Recursive: true,
+									Limit: limit,
+									Fields: fields
+								});
+								items = result?.Items || [];
+								break;
+							}
+							case 'recentlyReleasedEpisodes': {
+								const result = await api.getItems({
+									IncludeItemTypes: 'Episode',
+									SortBy: 'PremiereDate',
+									SortOrder: 'Descending',
+									Recursive: true,
+									Limit: limit,
+									Fields: fields
+								});
+								items = result?.Items || [];
+								break;
+							}
+							case 'watchAgain': {
+								const result = await api.getItems({
+									IncludeItemTypes: 'Movie,Series',
+									Filters: 'IsPlayed',
+									SortBy: 'DatePlayed',
+									SortOrder: 'Descending',
+									Recursive: true,
+									Limit: limit,
+									Fields: fields
+								});
+								items = result?.Items || [];
+								break;
+							}
+							case 'recentlyAddedInLibrary': {
+								const libraryIds = Array.isArray(spec.libraryIds) ? spec.libraryIds : [];
+								const responses = await Promise.all(
+									libraryIds.map((libraryId) => api.getItems({
+										ParentId: libraryId,
+										IncludeItemTypes: 'Movie,Series',
+										SortBy: 'DateCreated',
+										SortOrder: 'Descending',
+										Recursive: true,
+										Limit: limit,
+										Fields: fields
+									}).catch(() => null))
+								);
+								items = responses.flatMap((response) => response?.Items || []).slice(0, limit);
+								break;
+							}
+							case 'custom': {
+								const includeItemTypes = Array.isArray(spec.includeItemTypes)
+									? spec.includeItemTypes.join(',')
+									: 'Movie,Series';
+								const sortBy = spec.sortBy || 'Random';
+								const sortOrder = spec.sortOrderDirection || 'Ascending';
+								const params = {
+									IncludeItemTypes: includeItemTypes,
+									SortBy: sortBy,
+									SortOrder: sortOrder,
+									Recursive: true,
+									Limit: limit,
+									Fields: fields
+								};
+								if (spec.type === 'genre' && spec.source) params.Genres = spec.source;
+								if (spec.type === 'person' && spec.source) params.PersonIds = spec.source;
+								if (spec.type === 'studio' && spec.source) params.StudioIds = spec.source;
+								if (spec.type === 'collection' && spec.source) params.ParentId = spec.source;
+								const result = await api.getItems(params);
+								items = result?.Items || [];
+								break;
+							}
+							case 'collection': {
+								const collectionId = spec.collectionId || null;
+								if (!collectionId) {
+									items = [];
+									break;
+								}
+								const result = await api.getCollectionItems(collectionId, limit);
+								items = result?.Items || [];
+								break;
+							}
+							case 'genre': {
+								const params = {
+									IncludeItemTypes: spec.includeItemTypes || 'Movie,Series',
+									SortBy: spec.sortBy || 'SortName',
+									SortOrder: spec.sortOrder || 'Ascending',
+									Recursive: true,
+									Limit: limit,
+									Fields: fields
+								};
+								if (spec.genreId) {
+									params.GenreIds = spec.genreId;
+								} else if (spec.genreName) {
+									params.Genres = spec.genreName;
+								}
+								const result = await api.getItems(params);
+								items = result?.Items || [];
+								break;
+							}
+							case 'hssSection': {
+								const sectionType = spec.sectionType || spec.section || spec.sectionName || null;
+								if (!sectionType) {
+									items = [];
+									break;
+								}
+								const additionalData = spec.additionalData ?? null;
+								const hssLanguage = spec.language || settings.uiLanguage || null;
+								const result = await api.getHomeScreenSectionContent(
+									sectionType,
+									additionalData,
+									hssLanguage
+								);
+								items = normalizeHssItems(getResultItems(result), sectionType, additionalData);
+								break;
+							}
+							case 'hssRaw': {
+								const rawSection = spec.section && typeof spec.section === 'object' ? spec.section : {};
+								const rawSectionType = rawSection.Section || rawSection.section || null;
+								const rawAdditionalData = rawSection.AdditionalData || rawSection.additionalData || null;
+
+								const directItems = Array.isArray(rawSection.Items)
+									? rawSection.Items
+									: (Array.isArray(rawSection.items) ? rawSection.items : []);
+								if (directItems.length > 0) {
+									items = normalizeHssItems(directItems, rawSectionType, rawAdditionalData);
+									break;
+								}
+
+								const query = rawSection.Query || rawSection.query || rawSection.ItemQuery || rawSection.itemQuery || null;
+								if (query && typeof query === 'object') {
+									const params = {
+										...query,
+										Limit: query.Limit ?? query.limit ?? limit,
+										Fields: query.Fields || query.fields || fields
+									};
+									const result = await api.getItems(params);
+									items = getResultItems(result);
+									break;
+								}
+
+								const itemIds = (Array.isArray(rawSection.ItemIds)
+									? rawSection.ItemIds
+									: (Array.isArray(rawSection.itemIds) ? rawSection.itemIds : []))
+									.map((id) => String(id))
+									.filter(Boolean);
+								if (itemIds.length > 0) {
+									const result = await api.getItems({
+										Ids: itemIds.join(','),
+										Recursive: true,
+										Limit: limit,
+										Fields: fields
+									});
+									items = getResultItems(result);
+								} else if (rawSectionType) {
+									const result = await api.getHomeScreenSectionContent(
+										rawSectionType,
+										rawAdditionalData,
+										rawSection.Language || rawSection.language || spec.language || settings.uiLanguage || null
+									);
+									items = normalizeHssItems(getResultItems(result), rawSectionType, rawAdditionalData);
+								} else {
+									items = [];
+								}
+								break;
+							}
+							default:
+								items = [];
+						}
+
+						if (items.length === 0) return null;
+						const cardTypeHint = spec.cardType || spec.section?.CardType || spec.section?.cardType || spec.section?.Layout || spec.section?.layout;
+						const normalizedCardType = typeof cardTypeHint === 'string' ? cardTypeHint.toLowerCase() : '';
+						const viewModeHint = spec.viewMode || spec.section?.ViewMode || spec.section?.viewMode || '';
+						const normalizedViewMode = typeof viewModeHint === 'string' ? viewModeHint.toLowerCase() : '';
+						let rowType = 'portrait';
+						if (normalizedViewMode.includes('portrait')) {
+							rowType = 'portrait';
+						} else if (normalizedViewMode.includes('square')) {
+							rowType = 'square';
+						} else if (
+							normalizedViewMode.includes('landscape') ||
+							normalizedViewMode.includes('small') ||
+							normalizedViewMode.includes('backdrop') ||
+							normalizedCardType.includes('landscape') ||
+							normalizedCardType.includes('thumb') ||
+							spec.kind === 'recentlyReleasedEpisodes'
+						) {
+							rowType = 'landscape';
+						}
+						return {
+							id: section.id,
+							title,
+							items,
+							type: rowType,
+							isPluginRow: true,
+							pluginSource: section.source
+						};
+					} catch (_error) {
+						return null;
+					}
+				};
 
 				if (unifiedMode) {
 					latestResults = await connectionPool.getLatestPerLibraryFromAllServers(
 						latestItemsExcludes,
 						EXCLUDED_COLLECTION_TYPES
 					);
-					collectionsResult = null;
 				} else {
-					[latestResults, collectionsResult] = await Promise.all([
+					const favoriteSortBy = settings.favoritesRowSortBy || 'SortName';
+					const favoriteSortOrder = getSortOrderFromSortBy(favoriteSortBy);
+					const collectionsSortBy = settings.collectionsRowSortBy || 'SortName';
+					const collectionsSortOrder = getSortOrderFromSortBy(collectionsSortBy);
+					const genresSortBy = settings.genresRowSortBy || 'SortName';
+					const genresSortOrder = getSortOrderFromSortBy(genresSortBy);
+					const genresIncludeTypes = getGenresIncludeTypes(settings.genresRowItemFilter);
+					const enabledPluginSections = (settings.pluginSections || []).filter((section) => section.enabled);
+
+					[latestResults, collectionsResult, favoriteResults, genresResult, pluginRows] = await Promise.all([
 						Promise.all(
 							eligibleLibraries.map(lib =>
 								api.getLatest(lib.Id, 16)
@@ -718,7 +1121,30 @@ const Browse = ({
 									.catch(() => null)
 							)
 						),
-						api.getCollections(20).catch(() => null)
+						settings.displayCollectionsRows
+							? api.getCollections(20, collectionsSortBy, collectionsSortOrder).catch(() => null)
+							: Promise.resolve(null),
+						settings.displayFavoritesRows
+							? Promise.all(
+								FAVORITE_ROW_CONFIGS.map((rowConfig) =>
+									api.getItems({
+										IncludeItemTypes: rowConfig.includeItemTypes,
+										Filters: 'IsFavorite',
+										SortBy: favoriteSortBy,
+										SortOrder: favoriteSortOrder,
+										Recursive: true,
+										Limit: 20,
+										Fields: 'PrimaryImageAspectRatio,ProductionYear,ImageTags,UserData,SeriesPrimaryImageTag,AlbumArtist,AlbumId,AlbumPrimaryImageTag'
+									})
+										.then((result) => ({rowConfig, result}))
+										.catch(() => null)
+								)
+							)
+							: Promise.resolve([]),
+						settings.displayGenresRows
+							? api.getGenres(undefined, genresIncludeTypes, genresSortBy, genresSortOrder).catch(() => null)
+							: Promise.resolve(null),
+						Promise.all(enabledPluginSections.map((section) => fetchPluginSectionRow(section)))
 					]);
 				}
 
@@ -751,6 +1177,31 @@ const Browse = ({
 					});
 				}
 
+				favoriteResults
+					.filter(Boolean)
+					.forEach((favoriteResult) => {
+						const items = favoriteResult?.result?.Items || [];
+						if (items.length === 0) return;
+						newRows.push({
+							id: favoriteResult.rowConfig.id,
+							title: $L(favoriteResult.rowConfig.title),
+							items,
+							type: favoriteResult.rowConfig.type
+						});
+					});
+
+				if (genresResult?.Items?.length > 0) {
+					newRows.push({
+						id: 'genres',
+						title: $L('Genres'),
+						items: genresResult.Items,
+						type: 'portrait',
+						isGenreRow: true
+					});
+				}
+
+				pluginRows.filter(Boolean).forEach((pluginRow) => newRows.push(pluginRow));
+
 				dispatch({type: 'APPEND_ROWS', rows: newRows});
 				cachedRowData = [...rowData, ...newRows];
 				cacheTimestamp = Date.now();
@@ -767,7 +1218,29 @@ const Browse = ({
 		};
 
 		loadData();
-	}, [api, serverUrl, accessToken, settings.featuredContentType, settings.featuredItemCount, isCacheValid, loadBrowseCache, saveBrowseCache, fetchFreshFeaturedItems, unifiedMode, getItemServerUrl, refreshVolatileData]); // eslint-disable-line no-use-before-define
+	}, [
+		api,
+		serverUrl,
+		accessToken,
+		settings.featuredContentType,
+		settings.featuredItemCount,
+		settings.displayFavoritesRows,
+		settings.displayCollectionsRows,
+		settings.displayGenresRows,
+		settings.favoritesRowSortBy,
+		settings.collectionsRowSortBy,
+		settings.genresRowSortBy,
+		settings.genresRowItemFilter,
+		settings.uiLanguage,
+		settings.pluginSections,
+		isCacheValid,
+		loadBrowseCache,
+		saveBrowseCache,
+		fetchFreshFeaturedItems,
+		unifiedMode,
+		getItemServerUrl,
+		refreshVolatileData
+	]); // eslint-disable-line no-use-before-define
 
 	const targetBackdropUrl = useMemo(() => {
 		let itemForBackdrop = null;
@@ -799,6 +1272,25 @@ const Browse = ({
 			onSelectItem?.(item);
 		}
 	}, [onSelectItem, onSelectLibrary, onBlurItemThemeMusic, onLeaveThemeMusic]);
+
+	const handleSelectGenreItem = useCallback((item) => {
+		onBlurItemThemeMusic?.();
+		onLeaveThemeMusic?.();
+		if (lastFocusedRowRef.current !== null) {
+			lastFocusState = {
+				rowIndex: lastFocusedRowRef.current
+			};
+		}
+		onSelectGenre?.({
+			id: item.Id,
+			name: item.Name,
+			_serverUrl: item._serverUrl,
+			_serverName: item._serverName,
+			_serverAccessToken: item._serverAccessToken,
+			_serverUserId: item._serverUserId,
+			_serverId: item._serverId
+		});
+	}, [onSelectGenre, onBlurItemThemeMusic, onLeaveThemeMusic]);
 
 	const handleNavigateDownFromFeatured = useCallback(() => {
 		dispatch({type: 'SET_BROWSE_MODE', mode: 'rows'});
@@ -886,7 +1378,7 @@ const Browse = ({
 							items={row.items}
 							serverUrl={serverUrl}
 							cardType={row.type}
-							onSelectItem={handleSelectItem}
+							onSelectItem={row.isGenreRow ? handleSelectGenreItem : handleSelectItem}
 							onFocus={handleRowFocus}
 							onFocusItem={handleFocusItem}
 							rowIndex={index}

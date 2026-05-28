@@ -11,6 +11,8 @@ import {useJellyseerr} from '../../context/JellyseerrContext';
 import {useDeviceInfo} from '../../hooks/useDeviceInfo';
 import serverLogger from '../../services/serverLogger';
 import connectionPool from '../../services/connectionPool';
+import {probeKefinTweaks, kefinSectionToPluginSection} from '../../services/kefinTweaksService';
+import {probeHomeScreenSections, hssSectionToPluginSection} from '../../services/homeScreenSectionsService';
 import {clearCapabilitiesCache} from '../../services/deviceProfile';
 import {isBackKey} from '../../utils/keys';
 import ClearDataDialog from '../../components/ClearDataDialog';
@@ -77,6 +79,7 @@ const MATERIAL_ICON_NAME_MAP = {
 	exit: 'exit_to_app',
 	fifteenforward: 'fast_forward',
 	files: 'description',
+	filter: 'filter_list',
 	folder: 'folder',
 	folderupper: 'folder_open',
 	fullscreen: 'aspect_ratio',
@@ -319,6 +322,35 @@ const getImageTypeOptions = () => [
 	{ value: 'thumb', label: $L('Thumb') }
 ];
 
+const getHomeRowSortOptions = () => [
+	{ value: 'SortName', label: $L('Name') },
+	{ value: 'DateCreated', label: $L('Date Added') },
+	{ value: 'PremiereDate', label: $L('Premiere Date') },
+	{ value: 'OfficialRating', label: $L('Rating') },
+	{ value: 'Runtime', label: $L('Runtime') },
+	{ value: 'Random', label: $L('Random') },
+	{ value: 'CriticRating', label: $L('Critic Rating') },
+	{ value: 'CommunityRating', label: $L('Community Rating') }
+];
+
+const getGenresRowItemFilterOptions = () => [
+	{ value: 'all', label: $L('Movies & TV Shows') },
+	{ value: 'Movie', label: $L('Movies') },
+	{ value: 'Series', label: $L('TV Shows') }
+];
+
+const getSortOrderFromSortBy = (sortBy) => {
+	if (sortBy === 'SortName') return 'Ascending';
+	if (sortBy === 'Random') return 'Ascending';
+	return 'Descending';
+};
+
+const getGenresIncludeTypes = (filter) => {
+	if (filter === 'Movie') return 'Movie';
+	if (filter === 'Series') return 'Series';
+	return 'Movie,Series';
+};
+
 const LANGUAGE_OPTIONS = [
 	{ value: 'en-US', label: $L('English') },
 	{ value: 'de', label: $L('German') },
@@ -410,6 +442,120 @@ const getLabel = (options, value, fallback) => {
 	return option?.label || fallback;
 };
 
+const FAVORITES_ROW_IDS = [
+	'favoriteMovies',
+	'favoriteSeries',
+	'favoriteEpisodes',
+	'favoritePeople',
+	'favoriteArtists',
+	'favoriteMusicVideos',
+	'favoriteAlbums',
+	'favoriteSongs'
+];
+
+const isHomeRowVisibleByGates = (rowId, currentSettings) => {
+	if (FAVORITES_ROW_IDS.includes(rowId)) return currentSettings.displayFavoritesRows;
+	if (rowId === 'collections') return currentSettings.displayCollectionsRows;
+	if (rowId === 'genres') return currentSettings.displayGenresRows;
+	return true;
+};
+
+const mergeDiscoveredPluginSections = (existingSections, discoveredSections, source, toPluginSection) => {
+	const existing = Array.isArray(existingSections) ? existingSections : [];
+	const discovered = Array.isArray(discoveredSections) ? discoveredSections : [];
+
+	if (discovered.length === 0) {
+		return [...existing].sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+	}
+
+	const existingMap = new Map(existing.map((section) => [section.id, section]));
+	let nextOrder = existing.length;
+
+	const mergedSourceSections = discovered.map((section) => {
+		const existingSection = existingMap.get(section.id);
+		const fallbackOrder = existingSection?.order ?? nextOrder++;
+		return toPluginSection(section, existingSection, fallbackOrder);
+	});
+
+	return [...existing.filter((section) => section.source !== source), ...mergedSourceSections]
+		.sort((left, right) => (left.order ?? 0) - (right.order ?? 0))
+		.map((section, index) => ({...section, order: index}));
+};
+
+const COLLECTIONS_SECTION_SOURCE = 'collections';
+const GENRES_SECTION_SOURCE = 'genres';
+
+const normalizeSectionToken = (value, fallback) => {
+	if (value === undefined || value === null) return fallback;
+	const normalized = String(value)
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9_-]+/g, '-')
+		.replace(/^-+|-+$/g, '');
+	return normalized || fallback;
+};
+
+const buildCollectionPluginSections = (collections, sortBy, sortOrder) => {
+	const items = Array.isArray(collections) ? collections : [];
+	return items.map((collection, index) => {
+		const collectionId = collection?.Id || `collection-${index + 1}`;
+		const displayText = collection?.Name || `Collection ${index + 1}`;
+		return {
+			id: `collection:${normalizeSectionToken(collectionId, `collection-${index + 1}`)}`,
+			displayText,
+			order: index,
+			source: COLLECTIONS_SECTION_SOURCE,
+			specJson: JSON.stringify({
+				kind: 'collection',
+				collectionId: String(collectionId),
+				collectionName: String(displayText),
+				sortBy,
+				sortOrder,
+				limit: 40
+			})
+		};
+	});
+};
+
+const buildGenrePluginSections = (genres, includeItemTypes, sortBy, sortOrder) => {
+	const items = Array.isArray(genres) ? genres : [];
+	return items.map((genre, index) => {
+		const genreId = genre?.Id || genre?.Name || `genre-${index + 1}`;
+		const genreName = genre?.Name || `Genre ${index + 1}`;
+		return {
+			id: `genre:${normalizeSectionToken(genreId, normalizeSectionToken(genreName, `genre-${index + 1}`))}`,
+			displayText: genreName,
+			order: index,
+			source: GENRES_SECTION_SOURCE,
+			specJson: JSON.stringify({
+				kind: 'genre',
+				genreId: String(genreId),
+				genreName: String(genreName),
+				includeItemTypes,
+				sortBy,
+				sortOrder,
+				limit: 40
+			})
+		};
+	});
+};
+
+const builtInSectionToPluginSection = (section, existingSection = null, fallbackOrder = 0) => ({
+	id: section.id,
+	name: section.displayText,
+	enabled: existingSection?.enabled ?? false,
+	order: existingSection?.order ?? fallbackOrder,
+	source: section.source,
+	specJson: section.specJson
+});
+
+const getPluginSectionSourceLabel = (source) => {
+	if (source === 'kefinTweaks') return $L('KefinTweaks');
+	if (source === COLLECTIONS_SECTION_SOURCE) return $L('Collections');
+	if (source === GENRES_SECTION_SOURCE) return $L('Genres');
+	return $L('Home Screen Sections');
+};
+
 const renderToggle = (isOn) => (
 	<div className={`${css.toggleTrack} ${isOn ? css.toggleOn : ''}`}>
 		<div className={css.toggleThumb} />
@@ -430,7 +576,7 @@ const renderChevron = () => (
 
 const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 	const { api, serverUrl, accessToken, hasMultipleServers, logoutAll } = useAuth();
-	const { settings, updateSetting, resetSettings, availableThemes, activeThemeId, selectThemeById } = useSettings();
+	const { settings, updateSetting, updateSettings, resetSettings, availableThemes, activeThemeId, selectThemeById } = useSettings();
 	const { capabilities } = useDeviceInfo();
 	const jellyseerr = useJellyseerr();
 	const isSeerr = jellyseerr.isMoonfin && jellyseerr.variant === 'seerr';
@@ -459,6 +605,7 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 
 	const [serverVersion, setServerVersion] = useState(null);
 	const [tempHomeRows, setTempHomeRows] = useState([]);
+	const [tempPluginSections, setTempPluginSections] = useState([]);
 	const [allLibraries, setAllLibraries] = useState([]);
 	const [hiddenLibraries, setHiddenLibraries] = useState([]);
 	const [libraryLoading, setLibraryLoading] = useState(false);
@@ -467,6 +614,8 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 	const [clearDataDialogOpen, setClearDataDialogOpen] = useState(false);
 	const [moonfinStatus, setMoonfinStatus] = useState('');
 	const [moonfinConnecting, setMoonfinConnecting] = useState(false);
+	const [kefinProbeState, setKefinProbeState] = useState({loading: false, data: null, error: ''});
+	const [hssProbeState, setHssProbeState] = useState({loading: false, data: null, error: ''});
 	const languageChanged = settings.uiLanguage && settings.uiLanguage !== 'en-US';
 
 	useEffect(() => {
@@ -587,15 +736,97 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 	const openThemes = useCallback(() => {
 		pushView({ view: 'themes', returnFocusTo: 'setting-themeSelection' });
 	}, [pushView]);
+
+	const refreshBuiltInCollectionGenreSections = useCallback(async () => {
+		const collectionsSortBy = settings.collectionsRowSortBy || 'SortName';
+		const collectionsSortOrder = getSortOrderFromSortBy(collectionsSortBy);
+		const genresSortBy = settings.genresRowSortBy || 'SortName';
+		const genresSortOrder = getSortOrderFromSortBy(genresSortBy);
+		const genresIncludeTypes = getGenresIncludeTypes(settings.genresRowItemFilter);
+
+		const [collectionsResult, genresResult] = await Promise.all([
+			settings.displayCollectionsRows
+				? api.getCollections(500, collectionsSortBy, collectionsSortOrder).catch(() => null)
+				: Promise.resolve(null),
+			settings.displayGenresRows
+				? api.getGenres(undefined, genresIncludeTypes, genresSortBy, genresSortOrder).catch(() => null)
+				: Promise.resolve(null)
+		]);
+
+		return {
+			collections: buildCollectionPluginSections(collectionsResult?.Items || [], collectionsSortBy, collectionsSortOrder),
+			genres: buildGenrePluginSections(genresResult?.Items || [], genresIncludeTypes, genresSortBy, genresSortOrder)
+		};
+	}, [
+		api,
+		settings.collectionsRowSortBy,
+		settings.displayCollectionsRows,
+		settings.displayGenresRows,
+		settings.genresRowItemFilter,
+		settings.genresRowSortBy
+	]);
+
+	const getMergedPluginSectionsForEditor = useCallback(() => {
+		let mergedSections = [...(settings.pluginSections || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+		const kefinSections = kefinProbeState.data?.sections || [];
+		if (kefinSections.length > 0) {
+			mergedSections = mergeDiscoveredPluginSections(
+				mergedSections,
+				kefinSections,
+				'kefinTweaks',
+				kefinSectionToPluginSection
+			);
+		}
+
+		const hssSections = hssProbeState.data?.sections || [];
+		if (hssSections.length > 0) {
+			mergedSections = mergeDiscoveredPluginSections(
+				mergedSections,
+				hssSections,
+				'hss',
+				hssSectionToPluginSection
+			);
+		}
+
+		return [...mergedSections].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+	}, [settings.pluginSections, kefinProbeState.data, hssProbeState.data]);
+
 	const openHomeRows = useCallback(() => {
 		setTempHomeRows([...(settings.homeRows || DEFAULT_HOME_ROWS)].sort((a, b) => a.order - b.order));
+		setTempPluginSections(getMergedPluginSectionsForEditor());
 		pushView({ view: 'homeRows', returnFocusTo: 'setting-homeRows' });
-	}, [settings.homeRows, pushView]);
+
+		refreshBuiltInCollectionGenreSections()
+			.then((builtInSections) => {
+				setTempPluginSections((prev) => {
+					let merged = [...prev].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+					if ((builtInSections.collections || []).length > 0) {
+						merged = mergeDiscoveredPluginSections(
+							merged,
+							builtInSections.collections,
+							COLLECTIONS_SECTION_SOURCE,
+							builtInSectionToPluginSection
+						);
+					}
+					if ((builtInSections.genres || []).length > 0) {
+						merged = mergeDiscoveredPluginSections(
+							merged,
+							builtInSections.genres,
+							GENRES_SECTION_SOURCE,
+							builtInSectionToPluginSection
+						);
+					}
+					return merged;
+				});
+			})
+			.catch(() => {});
+	}, [settings.homeRows, pushView, getMergedPluginSectionsForEditor, refreshBuiltInCollectionGenreSections]);
 
 	const saveHomeRows = useCallback(() => {
-		updateSetting('homeRows', tempHomeRows);
+		updateSettings({homeRows: tempHomeRows, pluginSections: tempPluginSections});
 		popView();
-	}, [tempHomeRows, updateSetting, popView]);
+	}, [tempHomeRows, tempPluginSections, updateSettings, popView]);
 
 	const resetHomeRows = useCallback(() => {
 		setTempHomeRows([...DEFAULT_HOME_ROWS]);
@@ -607,27 +838,101 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 
 	const moveHomeRowUp = useCallback((rowId) => {
 		setTempHomeRows((prev) => {
+			const visibleRows = prev.filter((row) => isHomeRowVisibleByGates(row.id, settings));
+			const visibleIndex = visibleRows.findIndex((row) => row.id === rowId);
+			if (visibleIndex <= 0) return prev;
+			const targetId = visibleRows[visibleIndex - 1].id;
 			const index = prev.findIndex((r) => r.id === rowId);
-			if (index <= 0) return prev;
+			const targetIndex = prev.findIndex((r) => r.id === targetId);
+			if (index < 0 || targetIndex < 0) return prev;
 			const newRows = [...prev];
 			const temp = newRows[index].order;
-			newRows[index].order = newRows[index - 1].order;
-			newRows[index - 1].order = temp;
+			newRows[index].order = newRows[targetIndex].order;
+			newRows[targetIndex].order = temp;
 			return newRows.sort((a, b) => a.order - b.order);
 		});
-	}, []);
+	}, [settings]);
 
 	const moveHomeRowDown = useCallback((rowId) => {
 		setTempHomeRows((prev) => {
+			const visibleRows = prev.filter((row) => isHomeRowVisibleByGates(row.id, settings));
+			const visibleIndex = visibleRows.findIndex((row) => row.id === rowId);
+			if (visibleIndex < 0 || visibleIndex >= visibleRows.length - 1) return prev;
+			const targetId = visibleRows[visibleIndex + 1].id;
 			const index = prev.findIndex((r) => r.id === rowId);
-			if (index < 0 || index >= prev.length - 1) return prev;
+			const targetIndex = prev.findIndex((r) => r.id === targetId);
+			if (index < 0 || targetIndex < 0) return prev;
 			const newRows = [...prev];
 			const temp = newRows[index].order;
-			newRows[index].order = newRows[index + 1].order;
-			newRows[index + 1].order = temp;
+			newRows[index].order = newRows[targetIndex].order;
+			newRows[targetIndex].order = temp;
 			return newRows.sort((a, b) => a.order - b.order);
 		});
+	}, [settings]);
+
+	const togglePluginSection = useCallback((sectionId) => {
+		setTempPluginSections((prev) => prev.map((section) => (section.id === sectionId ? {...section, enabled: !section.enabled} : section)));
 	}, []);
+
+	const movePluginSectionUp = useCallback((sectionId) => {
+		setTempPluginSections((prev) => {
+			const index = prev.findIndex((section) => section.id === sectionId);
+			if (index <= 0) return prev;
+			const next = [...prev];
+			const temp = next[index].order;
+			next[index].order = next[index - 1].order;
+			next[index - 1].order = temp;
+			return next.sort((a, b) => a.order - b.order);
+		});
+	}, []);
+
+	const movePluginSectionDown = useCallback((sectionId) => {
+		setTempPluginSections((prev) => {
+			const index = prev.findIndex((section) => section.id === sectionId);
+			if (index < 0 || index >= prev.length - 1) return prev;
+			const next = [...prev];
+			const temp = next[index].order;
+			next[index].order = next[index + 1].order;
+			next[index + 1].order = temp;
+			return next.sort((a, b) => a.order - b.order);
+		});
+	}, []);
+
+	const refreshKefinTweaks = useCallback(async () => {
+		setKefinProbeState((prev) => ({...prev, loading: true, error: ''}));
+		try {
+			const data = await probeKefinTweaks(api);
+			const errorMessage = typeof data?.error === 'string'
+				? data.error
+				: (data?.error?.message || '');
+			setKefinProbeState({loading: false, data, error: errorMessage});
+		} catch (error) {
+			setKefinProbeState({loading: false, data: null, error: error?.message || $L('Failed to refresh KefinTweaks')});
+		}
+	}, [api]);
+
+	const refreshHomeScreenSections = useCallback(async () => {
+		setHssProbeState((prev) => ({...prev, loading: true, error: ''}));
+		try {
+			const data = await probeHomeScreenSections(api);
+			const errorMessage = typeof data?.error === 'string'
+				? data.error
+				: (data?.error?.message || '');
+			setHssProbeState({loading: false, data, error: errorMessage});
+		} catch (error) {
+			setHssProbeState({loading: false, data: null, error: error?.message || $L('Failed to refresh Home Screen Sections')});
+		}
+	}, [api]);
+
+	useEffect(() => {
+		if (currentView.view !== 'subcategory' || currentView.categoryId !== 'integrations') return;
+		if (currentView.subcategoryId === 'kefinTweaks' && !kefinProbeState.loading && !kefinProbeState.data) {
+			refreshKefinTweaks();
+		}
+		if (currentView.subcategoryId === 'homeScreenSections' && !hssProbeState.loading && !hssProbeState.data) {
+			refreshHomeScreenSections();
+		}
+	}, [currentView, kefinProbeState.loading, kefinProbeState.data, hssProbeState.loading, hssProbeState.data, refreshKefinTweaks, refreshHomeScreenSections]);
 
 	const openLibraries = useCallback(async () => {
 		pushView({ view: 'libraries', returnFocusTo: 'setting-hideLibraries' });
@@ -1077,6 +1382,32 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 	const renderPersonalizationHomePage = () => (
 		<>
 			{renderNavItem('homeRows', $L('Home Sections'), $L('Configure which rows appear on home screen'), openHomeRows, 'list')}
+			{renderToggleItem(
+				'displayFavoritesRows',
+				$L('Display Favorites Rows'),
+				$L('Show Favorite Movies, Series, and other favorite rows in Home Sections.'),
+				'heart'
+			)}
+			{settings.displayFavoritesRows &&
+				renderOptionItem('favoritesRowSortBy', $L('Favorites Row Sorting'), getHomeRowSortOptions(), $L('Name'), 'arrowupdown')}
+			{renderToggleItem(
+				'displayCollectionsRows',
+				$L('Display Collections Rows'),
+				$L('Show Collections rows in Home Sections.'),
+				'bookmark'
+			)}
+			{settings.displayCollectionsRows &&
+				renderOptionItem('collectionsRowSortBy', $L('Collections Row Sorting'), getHomeRowSortOptions(), $L('Name'), 'arrowupdown')}
+			{renderToggleItem(
+				'displayGenresRows',
+				$L('Display Genres Rows'),
+				$L('Show Genres rows in Home Sections.'),
+				'movies'
+			)}
+			{settings.displayGenresRows &&
+				renderOptionItem('genresRowSortBy', $L('Genres Row Sorting'), getHomeRowSortOptions(), $L('Name'), 'arrowupdown')}
+			{settings.displayGenresRows &&
+				renderOptionItem('genresRowItemFilter', $L('Genres Row Items'), getGenresRowItemFilterOptions(), $L('Movies & TV Shows'), 'filter')}
 			{renderToggleItem('mergeContinueWatchingNextUp', $L('Merge Continue Watching'), $L('Combine Continue Watching and Next Up'), 'arrowupdown')}
 			{renderOptionItem('homeRowsImageType', $L('Home Row Image Type'), getImageTypeOptions(), $L('Poster'), 'picture')}
 			{renderToggleItem('useSeriesThumbnails', $L('Series Thumbnails'), $L('Use series artwork instead of episode images'), 'aspectratio')}
@@ -1154,6 +1485,78 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 			{renderPluginSeerr()}
 		</>
 	);
+
+	const renderIntegrationsHomeScreenSections = () => {
+		const data = hssProbeState.data;
+		const mergedSections = mergeDiscoveredPluginSections(
+			settings.pluginSections,
+			data?.sections || [],
+			'hss',
+			hssSectionToPluginSection
+		);
+		const mergedCount = mergedSections.filter((section) => section.source === 'hss').length;
+		const hasSections = mergedCount > 0;
+		return (
+			<>
+				{renderInfoItem('hss-installed', $L('Installed'), data ? (data.installed ? $L('Yes') : $L('No')) : $L('Unknown'), 'plug')}
+				{renderInfoItem('hss-enabled', $L('Enabled'), data ? (data.enabled ? $L('Yes') : $L('No')) : $L('Unknown'), 'check')}
+				{renderInfoItem('hss-version', $L('Version'), data?.version || $L('Unknown'), 'info')}
+				{renderInfoItem('hss-sections', $L('Discovered Sections'), String(mergedCount), 'list')}
+				{hssProbeState.error && <div className={css.statusMessage}>{hssProbeState.error}</div>}
+				<div className={css.actionBarInline}>
+					<SpottableButton
+						className={css.actionButton}
+						onClick={refreshHomeScreenSections}
+						disabled={hssProbeState.loading}
+						spotlightId='hss-refresh'
+					>
+						{hssProbeState.loading ? $L('Refreshing...') : $L('Refresh')}
+					</SpottableButton>
+					{hasSections && (
+						<SpottableButton className={css.actionButton} onClick={openHomeRows} spotlightId='hss-configure'>
+							{$L('Configure Home Sections')}
+						</SpottableButton>
+					)}
+				</div>
+			</>
+		);
+	};
+
+	const renderIntegrationsKefinTweaks = () => {
+		const data = kefinProbeState.data;
+		const mergedSections = mergeDiscoveredPluginSections(
+			settings.pluginSections,
+			data?.sections || [],
+			'kefinTweaks',
+			kefinSectionToPluginSection
+		);
+		const mergedCount = mergedSections.filter((section) => section.source === 'kefinTweaks').length;
+		const hasSections = mergedCount > 0;
+		return (
+			<>
+				{renderInfoItem('kefin-installed', $L('Installed'), data ? (data.installed ? $L('Yes') : $L('No')) : $L('Unknown'), 'plug')}
+				{renderInfoItem('kefin-enabled', $L('Enabled'), data ? (data.enabled ? $L('Yes') : $L('No')) : $L('Unknown'), 'check')}
+				{renderInfoItem('kefin-version', $L('Version'), data?.version || $L('Unknown'), 'info')}
+				{renderInfoItem('kefin-sections', $L('Discovered Sections'), String(mergedCount), 'list')}
+				{kefinProbeState.error && <div className={css.statusMessage}>{kefinProbeState.error}</div>}
+				<div className={css.actionBarInline}>
+					<SpottableButton
+						className={css.actionButton}
+						onClick={refreshKefinTweaks}
+						disabled={kefinProbeState.loading}
+						spotlightId='kefin-refresh'
+					>
+						{kefinProbeState.loading ? $L('Refreshing...') : $L('Refresh')}
+					</SpottableButton>
+					{hasSections && (
+						<SpottableButton className={css.actionButton} onClick={openHomeRows} spotlightId='kefin-configure'>
+							{$L('Configure Home Sections')}
+						</SpottableButton>
+					)}
+				</div>
+			</>
+		);
+	};
 
 	const renderPlaybackAudio = () => (
 		<>
@@ -1500,9 +1903,9 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 			case 'integrations.seerr':
 				return renderIntegrationsSeerr();
 			case 'integrations.homeScreenSections':
-				return renderMissingItem('home-screen-sections', $L('Home Screen Sections'), undefined, 'list');
+				return renderIntegrationsHomeScreenSections();
 			case 'integrations.kefinTweaks':
-				return renderMissingItem('kefin-tweaks', $L('KefinTweaks'), undefined, 'plug');
+				return renderIntegrationsKefinTweaks();
 			case 'playbackSyncPlay.video':
 				return renderPlaybackVideo();
 			case 'playbackSyncPlay.audio':
@@ -1660,7 +2063,7 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 					<div className={css.viewDescription}>
 						{$L('Enable/disable and reorder the rows that appear on your home screen.')}
 					</div>
-					{tempHomeRows.map((row, index) => (
+					{tempHomeRows.filter((row) => isHomeRowVisibleByGates(row.id, settings)).map((row, index, visibleRows) => (
 						<div key={row.id} className={css.homeRowItem}>
 							<SpottableDiv
 								className={css.listItem}
@@ -1682,7 +2085,7 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 								/>
 								<Button
 									onClick={() => moveHomeRowDown(row.id)}
-									disabled={index === tempHomeRows.length - 1}
+									disabled={index === visibleRows.length - 1}
 									size='small'
 									icon='arrowlargedown'
 									spotlightId={`homerow-down-${row.id}`}
@@ -1690,6 +2093,42 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 							</div>
 						</div>
 					))}
+					{tempPluginSections.length > 0 && (
+						<>
+							{renderSectionTitle($L('Plugin Sections'))}
+							{tempPluginSections.map((section, index) => (
+								<div key={section.id} className={css.homeRowItem}>
+									<SpottableDiv
+										className={css.listItem}
+										onClick={() => togglePluginSection(section.id)}
+										spotlightId={`pluginrow-${section.id}`}
+									>
+										<div className={css.listItemBody}>
+											<div className={css.listItemHeading}>{section.name}</div>
+											<div className={css.listItemCaption}>{getPluginSectionSourceLabel(section.source)}</div>
+										</div>
+										<div className={css.listItemTrailing}>{renderToggle(section.enabled)}</div>
+									</SpottableDiv>
+									<div className={css.homeRowControls}>
+										<Button
+											onClick={() => movePluginSectionUp(section.id)}
+											disabled={index === 0}
+											size='small'
+											icon='arrowlargeup'
+											spotlightId={`pluginrow-up-${section.id}`}
+										/>
+										<Button
+											onClick={() => movePluginSectionDown(section.id)}
+											disabled={index === tempPluginSections.length - 1}
+											size='small'
+											icon='arrowlargedown'
+											spotlightId={`pluginrow-down-${section.id}`}
+										/>
+									</div>
+								</div>
+							))}
+						</>
+					)}
 					<div className={css.actionBar}>
 						<Button onClick={resetHomeRows} size='small' spotlightId='homerow-reset'>
 							{$L('Reset to Default')}
