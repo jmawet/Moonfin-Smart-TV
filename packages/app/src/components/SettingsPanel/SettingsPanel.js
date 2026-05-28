@@ -14,7 +14,7 @@ const SettingsPanel = ({onClose, onLibrariesChanged}) => {
 	return (
 		<div className={css.overlay}>
 			<div className={css.scrim} onClick={handleScrimClick} />
-			<PanelContainer className={css.panel} spotlightId="settings-panel-container" spotlightRestrict="self-only">
+			<PanelContainer className={css.panel} spotlightId="settings-panel-container">
 				<Settings panelMode onBack={onClose} onLibrariesChanged={onLibrariesChanged} />
 			</PanelContainer>
 		</div>

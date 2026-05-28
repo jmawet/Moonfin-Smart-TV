@@ -1,4 +1,4 @@
-@accent: var(--theme-accent, #00a4dc);
+@accent: var(--accent-color, #00a4dc);
 
 .modal {
 	padding: 28px 32px;
@@ -103,7 +103,6 @@
 	height: 130px;
 	border-radius: 50%;
 	background: var(--theme-surface-variant, #2a2a2a);
-	color: var(--theme-text-secondary, rgba(255, 255, 255, 0.7));
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -235,36 +234,34 @@
 	padding: 14px 20px;
 	font-size: 17px;
 	font-weight: 500;
-	background: var(--theme-button-normal, rgba(255, 255, 255, 0.08));
-	border: 2px solid rgba(var(--theme-on-surface-rgb, 255, 255, 255), 0.12);
+	background: rgba(255, 255, 255, 0.08);
+	border: 2px solid rgba(255, 255, 255, 0.12);
 	border-radius: 8px;
-	color: var(--theme-on-button-normal, #fff);
+	color: #fff;
 	cursor: pointer;
 	text-align: center;
 	transition: background 0.2s, border-color 0.2s, transform 0.2s;
 
 	&:focus {
 		outline: none;
-		background: var(--theme-button-focused, @accent);
-		border-color: var(--theme-focus-border-color, @accent);
-		color: var(--theme-on-button-focused, #fff);
+		background: @accent;
+		border-color: @accent;
 		transform: scale(1.03);
-		box-shadow: var(--theme-focus-glow, 0 0 0 3px rgba(var(--theme-accent-rgb, 0, 164, 220), 0.4));
+		box-shadow: 0 0 0 3px rgba(0, 164, 220, 0.4);
 	}
 }
 
 .dangerBtn {
 	&:focus {
-		background: var(--theme-recording-active, #c62828) !important;
-		border-color: var(--theme-recording-active, #c62828) !important;
-		color: var(--theme-on-badge, #fff) !important;
-		box-shadow: 0 0 0 3px rgba(var(--theme-recording-active-rgb, 198, 40, 40), 0.4) !important;
+		background: #c62828 !important;
+		border-color: #c62828 !important;
+		box-shadow: 0 0 0 3px rgba(198, 40, 40, 0.4) !important;
 	}
 }
 
 .divider {
 	height: 1px;
-	background: rgba(var(--theme-on-surface-rgb, 255, 255, 255), 0.16);
+	background: #333;
 	margin: 4px 0;
 }
 
@@ -274,20 +271,20 @@
 	padding: 24px;
 	min-width: 460px;
 	max-width: 560px;
-	background: var(--theme-surface, #1a1a1a);
+	background: #1a1a1a;
 	border-radius: 12px;
 }
 
 .confirmText {
 	font-size: 16px;
-	color: var(--theme-text-secondary, #ccc);
+	color: #ccc;
 	margin-bottom: 12px;
 }
 
 .confirmWarning {
 	font-size: 14px;
-	color: var(--theme-status-pending, #ff9800);
-	background: var(--theme-status-pending-20, rgba(255, 152, 0, 0.1));
+	color: #ff9800;
+	background: rgba(255, 152, 0, 0.1);
 	padding: 10px 14px;
 	border-radius: 6px;
 	margin-bottom: 20px;

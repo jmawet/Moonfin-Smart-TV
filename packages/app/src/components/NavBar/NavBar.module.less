@@ -1,3 +1,5 @@
+@accent: var(--accent-color, #00a4dc);
+
 .topNav {
 	position: fixed;
 	top: 30px;
@@ -130,7 +132,7 @@
 	width: 56px;
 	height: 56px;
 	border-radius: 50%;
-	background: linear-gradient(135deg, var(--theme-accent, #00a4dc), var(--theme-accent-secondary, #0077b6));
+	background: linear-gradient(135deg, @accent, var(--theme-accent-secondary, #0077b6));
 	display: flex;
 	align-items: center;
 	justify-content: center;

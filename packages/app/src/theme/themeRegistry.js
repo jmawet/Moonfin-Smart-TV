@@ -13,7 +13,6 @@ const moonfinTheme = parseThemeSpec({
 		surfaceVariant: '#FF252525',
 		scrim: '#CC000000',
 		accent: '#FF00A4DC',
-		accentSecondary: '#FFFF9800',
 		onAccent: '#FFFFFFFF',
 		buttonNormal: '#FF2A2A2A',
 		buttonFocused: '#FF00A4DC',
@@ -35,8 +34,7 @@ const moonfinTheme = parseThemeSpec({
 		badgeUnplayed: '#FF00A4DC',
 		badgeWatched: '#FF22C55E',
 		recordingActive: '#FFEF4444',
-		recordingScheduled: '#FFF59E0B',
-		favoriteActive: '#FFEF4444'
+		recordingScheduled: '#FFF59E0B'
 	},
 	borders: {
 		cardBorder: {color: '#00000000', width: 1},
@@ -57,7 +55,7 @@ const neonPulseTheme = parseThemeSpec({
 	fontFamily: 'NeonPulseDisplay',
 	textGlow: [{color: '#6600E5FF', blurRadius: 8, spreadRadius: 0, offsetX: 0, offsetY: 0}],
 	navColorCycle: ['#FFFF2E92', '#FF00E5FF'],
-	transparentNavbarSurface: false,
+	transparentNavbarSurface: true,
 	colors: {
 		background: '#FF0B0420',
 		onBackground: '#FF00E5FF',
@@ -66,7 +64,6 @@ const neonPulseTheme = parseThemeSpec({
 		surfaceVariant: '#CC1E0A3F',
 		scrim: '#CC0B0420',
 		accent: '#FFFF2E92',
-		accentSecondary: '#FF00E5FF',
 		onAccent: '#FFFFFFFF',
 		buttonNormal: '#00000000',
 		buttonFocused: '#33FF2E92',
@@ -88,8 +85,7 @@ const neonPulseTheme = parseThemeSpec({
 		badgeUnplayed: '#FFFF2E92',
 		badgeWatched: '#FF00E5FF',
 		recordingActive: '#FFFF2E92',
-		recordingScheduled: '#FF00E5FF',
-		favoriteActive: '#FFFF2E92'
+		recordingScheduled: '#FF00E5FF'
 	},
 	borders: {
 		cardBorder: {color: '#66FF2E92', width: 1},

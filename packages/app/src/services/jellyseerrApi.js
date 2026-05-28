@@ -256,6 +256,27 @@ result[normalized] = obj[key];
 return result;
 };
 
+const normalizeMoonfinStreamEvent = (payload) => {
+if (payload == null) return null;
+
+let parsed = payload;
+if (typeof parsed === 'string') {
+const trimmed = parsed.trim();
+if (!trimmed) return null;
+try {
+parsed = JSON.parse(trimmed);
+} catch (_) {
+return {type: trimmed};
+}
+}
+
+if (!parsed || typeof parsed !== 'object') {
+return null;
+}
+
+return normalizeKeys(parsed);
+};
+
 export const moonfinPing = async (serverUrl, token) => {
 const sUrl = serverUrl || jellyfinServerUrl;
 const sToken = token || jellyfinAccessToken;
@@ -417,6 +438,148 @@ throw error;
 }
 
 return true;
+};
+
+export const subscribeMoonfinSettingsStream = (serverUrl, token, onEvent, onError) => {
+const sUrl = (serverUrl || jellyfinServerUrl || '').replace(/\/+$/, '');
+const sToken = token || jellyfinAccessToken;
+if (!sUrl || !sToken) {
+throw new Error('Server URL and token required');
+}
+
+let closed = false;
+const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+let eventSource = null;
+
+const emitError = (error) => {
+if (closed) return;
+if (error?.name === 'AbortError') return;
+if (typeof onError === 'function') {
+onError(error);
+}
+};
+
+const emitEvent = (payload) => {
+if (closed) return;
+const normalized = normalizeMoonfinStreamEvent(payload);
+if (!normalized) return;
+if (typeof onEvent === 'function') {
+onEvent(normalized);
+}
+};
+
+const connectWithEventSource = () => {
+const EventSourceCtor = typeof globalThis !== 'undefined' ? globalThis.EventSource : undefined;
+if (typeof EventSourceCtor === 'undefined') {
+return false;
+}
+
+const streamUrl = `${sUrl}/Moonfin/Settings/Stream?api_key=${encodeURIComponent(sToken)}`;
+try {
+eventSource = new EventSourceCtor(streamUrl);
+} catch (error) {
+emitError(error);
+return false;
+}
+
+eventSource.onmessage = (messageEvent) => {
+const payload = messageEvent?.data;
+if (!payload) return;
+emitEvent(payload);
+};
+
+eventSource.onerror = () => {
+if (closed) return;
+try {
+eventSource?.close();
+} catch (error) {
+void error;
+}
+eventSource = null;
+emitError(new Error('Moonfin settings stream closed'));
+};
+
+return true;
+};
+
+const run = async () => {
+try {
+const response = await fetch(`${sUrl}/Moonfin/Settings/Stream`, {
+method: 'GET',
+headers: {
+'Accept': 'text/event-stream',
+'Authorization': `MediaBrowser Token="${sToken}"`
+},
+signal: controller?.signal
+});
+
+if (!response.ok) {
+const error = new Error(`Moonfin settings stream failed: ${response.status}`);
+error.status = response.status;
+throw error;
+}
+
+if (!response.body || typeof response.body.getReader !== 'function') {
+if (connectWithEventSource()) {
+return;
+}
+throw new Error('Moonfin settings stream is not supported on this device');
+}
+
+const reader = response.body.getReader();
+const decoder = new TextDecoder();
+let buffer = '';
+
+while (!closed) {
+const {value, done} = await reader.read();
+if (done) break;
+
+buffer += decoder.decode(value, {stream: true});
+const lines = buffer.split('\n');
+buffer = lines.pop() || '';
+
+for (const rawLine of lines) {
+const line = rawLine.trimEnd();
+if (!line.startsWith('data:')) continue;
+
+const payload = line.slice(5).trim();
+if (!payload) continue;
+
+try {
+const parsed = JSON.parse(payload);
+emitEvent(parsed);
+} catch (error) {
+emitEvent(payload);
+}
+}
+}
+
+if (!closed) {
+emitError(new Error('Moonfin settings stream closed'));
+}
+} catch (error) {
+emitError(error);
+}
+};
+
+run();
+
+return {
+abort: () => {
+closed = true;
+try {
+controller?.abort();
+} catch (error) {
+void error;
+}
+try {
+eventSource?.close();
+} catch (error) {
+void error;
+}
+eventSource = null;
+}
+};
 };
 
 export const getMoonfinMediaBar = async (serverUrl, token, profile = 'tv') => {
@@ -751,6 +914,7 @@ getMoonfinConfig,
 getMoonfinSettings,
 getMoonfinThemes,
 saveMoonfinProfile,
+subscribeMoonfinSettingsStream,
 getUser,
 PERMISSIONS,
 hasPermission,

@@ -50,11 +50,6 @@ margin: 0 auto;
 padding: 0 60px;
 }
 
-.pagePanel .listInner {
-	max-width: none;
-	padding: 0 24px;
-}
-
 .listItem {
 display: flex;
 align-items: center;
@@ -101,13 +96,6 @@ background: var(--theme-chip-background, rgba(0, 164, 220, 0.15));
 }
 }
 
-.materialIconSvg {
-	width: 24px;
-	height: 24px;
-	display: block;
-	filter: brightness(0) saturate(100%) invert(47%) sepia(98%) saturate(3493%) hue-rotate(165deg) brightness(95%) contrast(101%);
-}
-
 .listItemBody {
 flex: 1;
 min-width: 0;
@@ -136,7 +124,7 @@ align-items: center;
 
 .listItemValue {
 font-size: 17px;
-color: var(--theme-accent, #00a4dc);
+color: var(--accent-color, #00a4dc);
 font-weight: 500;
 margin-left: 20px;
 flex-shrink: 0;
@@ -158,7 +146,7 @@ flex-shrink: 0;
 }
 
 .toggleOn {
-background: var(--theme-accent, #00a4dc);
+background: var(--accent-color, #00a4dc);
 }
 
 .toggleThumb {
@@ -188,14 +176,14 @@ transition: border-color 0.2s;
 }
 
 .radioSelected {
-border-color: var(--theme-accent, #00a4dc);
+border-color: var(--accent-color, #00a4dc);
 }
 
 .radioInner {
 width: 14px;
 height: 14px;
 border-radius: 50%;
-background: var(--theme-accent, #00a4dc);
+background: var(--accent-color, #00a4dc);
 transform: scale(0);
 transition: transform 0.15s ease;
 
@@ -242,23 +230,6 @@ align-items: center;
 margin-bottom: 12px;
 }
 
-.sliderTitleGroup {
-	display: flex;
-	align-items: center;
-	min-width: 0;
-
-	.listItemIcon {
-		width: 40px;
-		height: 40px;
-		margin-right: 16px;
-		border-radius: 12px;
-	}
-
-	.sliderContainer:focus-within & .listItemIcon {
-		background: rgba(0, 164, 220, 0.15);
-	}
-}
-
 .sliderTitle {
 font-size: 20px;
 font-weight: 500;
@@ -267,13 +238,13 @@ color: var(--theme-text-primary, #fff);
 
 .sliderValue {
 font-size: 17px;
-color: var(--theme-accent, #00a4dc);
+color: var(--accent-color, #00a4dc);
 font-weight: 500;
 }
 
 .settingsSlider {
 width: 100%;
---slider-active-bg-color: var(--theme-accent, #00a4dc);
+--slider-active-bg-color: var(--accent-color, #00a4dc);
 --slider-knob-bg-color: var(--theme-on-surface, #fff);
 }
 
@@ -402,8 +373,8 @@ transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 
 &:focus {
 outline: none;
-background: var(--theme-accent, #00a4dc);
-border-color: var(--theme-accent, #00a4dc);
+background: var(--accent-color, #00a4dc);
+border-color: var(--accent-color, #00a4dc);
 color: var(--theme-on-accent, #fff);
 transform: scale(1.05);
 will-change: transform;
@@ -469,4 +440,17 @@ flex-shrink: 0;
 > * + * {
 margin-left: 4px;
 }
+}
+
+.integrationServerBlock {
+margin-bottom: 8px;
+}
+
+.integrationSpec {
+margin-top: 6px;
+font-size: 13px;
+line-height: 1.35;
+color: var(--theme-text-muted, #666);
+word-break: break-word;
+white-space: normal;
 }

@@ -198,14 +198,6 @@ export const parseThemeSpec = (json) => {
 	for (const key of REQUIRED_COLOR_KEYS) {
 		colors[key] = normalizeHexColor(colorsSource[key], `colors.${key}`);
 	}
-	colors.accentSecondary = normalizeHexColor(
-		colorsSource.accentSecondary ?? colors.recordingScheduled,
-		'colors.accentSecondary'
-	);
-	colors.favoriteActive = normalizeHexColor(
-		colorsSource.favoriteActive ?? colors.recordingActive,
-		'colors.favoriteActive'
-	);
 	const bordersSource = json.borders;
 	if (!bordersSource || typeof bordersSource !== 'object') {
 		throw new Error('Theme borders are required.');
@@ -296,96 +288,75 @@ const shadowToCss = (shadow) => {
 	return `${offsetX}px ${offsetY}px ${blur}px ${spread}px ${toCssColor(shadow.color)}`;
 };
 
-export const buildThemeCssVars = (theme) => {
-	const vars = {
-		'--accent-color': toCssColor(theme.colors.accent),
-		'--theme-background': toCssColor(theme.colors.background),
-		'--theme-on-background': toCssColor(theme.colors.onBackground),
-		'--theme-surface': toCssColor(theme.colors.surface),
-		'--theme-on-surface': toCssColor(theme.colors.onSurface),
-		'--theme-surface-variant': toCssColor(theme.colors.surfaceVariant),
-		'--theme-scrim': toCssColor(theme.colors.scrim),
-		'--theme-accent': toCssColor(theme.colors.accent),
-		'--theme-accent-secondary': toCssColor(theme.colors.accentSecondary),
-		'--theme-on-accent': toCssColor(theme.colors.onAccent),
-		'--theme-button-normal': toCssColor(theme.colors.buttonNormal),
-		'--theme-button-focused': toCssColor(theme.colors.buttonFocused),
-		'--theme-button-disabled': toCssColor(theme.colors.buttonDisabled),
-		'--theme-button-active': toCssColor(theme.colors.buttonActive),
-		'--theme-input-background': toCssColor(theme.colors.inputBackground),
-		'--theme-input-focused': toCssColor(theme.colors.inputFocused),
-		'--theme-input-border': toCssColor(theme.colors.inputBorder),
-		'--theme-input-border-focused': toCssColor(theme.colors.inputBorderFocused),
-		'--theme-range-track': toCssColor(theme.colors.rangeTrack),
-		'--theme-range-progress': toCssColor(theme.colors.rangeProgress),
-		'--theme-range-thumb': toCssColor(theme.colors.rangeThumb),
-		'--theme-seekbar-buffered': toCssColor(theme.colors.seekbarBuffered),
-		'--theme-badge-background': toCssColor(theme.colors.badgeBackground),
-		'--theme-badge-unplayed': toCssColor(theme.colors.badgeUnplayed),
-		'--theme-badge-watched': toCssColor(theme.colors.badgeWatched),
-		'--theme-recording-active': toCssColor(theme.colors.recordingActive),
-		'--theme-recording-active-20': toCssColorWithAlpha(theme.colors.recordingActive, 0.2),
-		'--theme-recording-scheduled': toCssColor(theme.colors.recordingScheduled),
-		'--theme-favorite-active': toCssColor(theme.colors.favoriteActive),
-		'--theme-focus-border-color': toCssColor(theme.borders.focusBorder.color),
-		'--theme-focus-border-width': `${theme.borders.focusBorder.width}px`,
-		'--theme-card-radius': radiusToCss(theme.borders.cardRadius),
-		'--theme-chip-radius': radiusToCss(theme.borders.chipRadius),
-		'--theme-chip-background': toCssColor(theme.borders.chipBackground),
-		'--theme-chip-border': `${theme.borders.chipBorder.width}px solid ${toCssColor(theme.borders.chipBorder.color)}`,
-		'--theme-card-border': `${theme.borders.cardBorder.width}px solid ${toCssColor(theme.borders.cardBorder.color)}`,
-		'--theme-nav-border': theme.borders.navBorder
-			? `${theme.borders.navBorder.width}px solid ${toCssColor(theme.borders.navBorder.color)}`
-			: 'none',
-		'--theme-focus-glow': theme.borders.focusGlow.length ? theme.borders.focusGlow.map(shadowToCss).join(', ') : 'none',
-		'--theme-text-glow': theme.textGlow.length ? theme.textGlow.map(shadowToCss).join(', ') : 'none',
-		'--theme-font-family': theme.fontFamily || 'inherit',
-		'--theme-nav-surface': theme.transparentNavbarSurface ? 'transparent' : toCssColor(theme.colors.surface),
-		'--theme-status-available': toCssColor(theme.semantic.statusAvailable),
-		'--theme-status-available-20': toCssColorWithAlpha(theme.semantic.statusAvailable, 0.2),
-		'--theme-status-requested': toCssColor(theme.semantic.statusRequested),
-		'--theme-status-requested-20': toCssColorWithAlpha(theme.semantic.statusRequested, 0.2),
-		'--theme-status-pending': toCssColor(theme.semantic.statusPending),
-		'--theme-status-pending-20': toCssColorWithAlpha(theme.semantic.statusPending, 0.2),
-		'--theme-status-downloading': toCssColor(theme.semantic.statusDownloading),
-		'--theme-status-downloading-20': toCssColorWithAlpha(theme.semantic.statusDownloading, 0.2),
-		'--theme-badge-movie': toCssColor(theme.semantic.mediaTypeBadgeMovie),
-		'--theme-badge-show': toCssColor(theme.semantic.mediaTypeBadgeShow),
-		// button text
-		'--theme-on-button-normal': toCssColor(theme.colors.onButtonNormal),
-		'--theme-on-button-focused': toCssColor(theme.colors.onButtonFocused),
-		'--theme-on-button-disabled': toCssColor(theme.colors.onButtonDisabled),
-		'--theme-on-badge': toCssColor(theme.colors.onBadge),
-		// derived convenience vars consumed by global LESS variables
-		'--theme-text-primary': toCssColor(theme.colors.onBackground),
-		'--theme-text-secondary': toCssColorWithAlpha(theme.colors.onSurface, 0.7),
-		'--theme-text-muted': toCssColorWithAlpha(theme.colors.onSurface, 0.45),
-		'--theme-border-color': toCssColor(theme.borders.cardBorder.color),
-		'--theme-login-gradient-end': toCssColor(theme.colors.surfaceVariant),
-		// RGB triplet vars for use in rgba(var(...), opacity) syntax
-		'--theme-background-rgb': toRgbTriplet(theme.colors.background),
-		'--theme-surface-rgb': toRgbTriplet(theme.colors.surface),
-		'--theme-on-background-rgb': toRgbTriplet(theme.colors.onBackground),
-		'--theme-on-surface-rgb': toRgbTriplet(theme.colors.onSurface),
-		'--theme-accent-rgb': toRgbTriplet(theme.colors.accent),
-		'--theme-accent-secondary-rgb': toRgbTriplet(theme.colors.accentSecondary),
-		'--theme-button-normal-rgb': toRgbTriplet(theme.colors.buttonNormal),
-		'--theme-button-focused-rgb': toRgbTriplet(theme.colors.buttonFocused),
-		'--theme-on-button-normal-rgb': toRgbTriplet(theme.colors.onButtonNormal),
-		'--theme-on-button-focused-rgb': toRgbTriplet(theme.colors.onButtonFocused),
-		'--theme-recording-active-rgb': toRgbTriplet(theme.colors.recordingActive),
-		'--theme-favorite-active-rgb': toRgbTriplet(theme.colors.favoriteActive),
-		'--theme-surface-variant-rgb': toRgbTriplet(theme.colors.surfaceVariant),
-		'--theme-scrim-rgb': toRgbTriplet(theme.colors.scrim)
-	};
-
-	for (let index = 0; index < 16; index += 1) {
-		if (theme.navColorCycle.length > 0) {
-			vars[`--theme-nav-color-${index + 1}`] = toCssColor(
-				theme.navColorCycle[index % theme.navColorCycle.length]
-			);
-		}
-	}
-
-	return vars;
-};
+export const buildThemeCssVars = (theme) => ({
+	'--accent-color': toCssColor(theme.borders.focusBorder.color),
+	'--theme-background': toCssColor(theme.colors.background),
+	'--theme-on-background': toCssColor(theme.colors.onBackground),
+	'--theme-surface': toCssColor(theme.colors.surface),
+	'--theme-on-surface': toCssColor(theme.colors.onSurface),
+	'--theme-surface-variant': toCssColor(theme.colors.surfaceVariant),
+	'--theme-scrim': toCssColor(theme.colors.scrim),
+	'--theme-accent': toCssColor(theme.colors.accent),
+	'--theme-on-accent': toCssColor(theme.colors.onAccent),
+	'--theme-button-normal': toCssColor(theme.colors.buttonNormal),
+	'--theme-button-focused': toCssColor(theme.colors.buttonFocused),
+	'--theme-button-disabled': toCssColor(theme.colors.buttonDisabled),
+	'--theme-button-active': toCssColor(theme.colors.buttonActive),
+	'--theme-input-background': toCssColor(theme.colors.inputBackground),
+	'--theme-input-focused': toCssColor(theme.colors.inputFocused),
+	'--theme-input-border': toCssColor(theme.colors.inputBorder),
+	'--theme-input-border-focused': toCssColor(theme.colors.inputBorderFocused),
+	'--theme-range-track': toCssColor(theme.colors.rangeTrack),
+	'--theme-range-progress': toCssColor(theme.colors.rangeProgress),
+	'--theme-range-thumb': toCssColor(theme.colors.rangeThumb),
+	'--theme-seekbar-buffered': toCssColor(theme.colors.seekbarBuffered),
+	'--theme-badge-background': toCssColor(theme.colors.badgeBackground),
+	'--theme-badge-unplayed': toCssColor(theme.colors.badgeUnplayed),
+	'--theme-badge-watched': toCssColor(theme.colors.badgeWatched),
+	'--theme-recording-active': toCssColor(theme.colors.recordingActive),
+	'--theme-recording-scheduled': toCssColor(theme.colors.recordingScheduled),
+	'--theme-focus-border-color': toCssColor(theme.borders.focusBorder.color),
+	'--theme-focus-border-width': `${theme.borders.focusBorder.width}px`,
+	'--theme-card-radius': radiusToCss(theme.borders.cardRadius),
+	'--theme-chip-radius': radiusToCss(theme.borders.chipRadius),
+	'--theme-chip-background': toCssColor(theme.borders.chipBackground),
+	'--theme-chip-border': `${theme.borders.chipBorder.width}px solid ${toCssColor(theme.borders.chipBorder.color)}`,
+	'--theme-card-border': `${theme.borders.cardBorder.width}px solid ${toCssColor(theme.borders.cardBorder.color)}`,
+	'--theme-nav-border': theme.borders.navBorder
+		? `${theme.borders.navBorder.width}px solid ${toCssColor(theme.borders.navBorder.color)}`
+		: 'none',
+	'--theme-focus-glow': theme.borders.focusGlow.length ? theme.borders.focusGlow.map(shadowToCss).join(', ') : 'none',
+	'--theme-text-glow': theme.textGlow.length ? theme.textGlow.map(shadowToCss).join(', ') : 'none',
+	'--theme-font-family': theme.fontFamily || 'inherit',
+	'--theme-nav-surface': theme.transparentNavbarSurface ? 'transparent' : toCssColor(theme.colors.surface),
+	'--theme-nav-color-1': theme.navColorCycle[0] ? toCssColor(theme.navColorCycle[0]) : toCssColor(theme.colors.onSurface),
+	'--theme-nav-color-2': theme.navColorCycle[1] ? toCssColor(theme.navColorCycle[1]) : toCssColor(theme.colors.accent),
+	'--theme-status-available': toCssColor(theme.semantic.statusAvailable),
+	'--theme-status-available-20': toCssColorWithAlpha(theme.semantic.statusAvailable, 0.2),
+	'--theme-status-requested': toCssColor(theme.semantic.statusRequested),
+	'--theme-status-pending': toCssColor(theme.semantic.statusPending),
+	'--theme-status-pending-20': toCssColorWithAlpha(theme.semantic.statusPending, 0.2),
+	'--theme-status-downloading': toCssColor(theme.semantic.statusDownloading),
+	'--theme-badge-movie': toCssColor(theme.semantic.mediaTypeBadgeMovie),
+	'--theme-badge-show': toCssColor(theme.semantic.mediaTypeBadgeShow),
+	// button text
+	'--theme-on-button-normal': toCssColor(theme.colors.onButtonNormal),
+	'--theme-on-button-focused': toCssColor(theme.colors.onButtonFocused),
+	'--theme-on-button-disabled': toCssColor(theme.colors.onButtonDisabled),
+	'--theme-on-badge': toCssColor(theme.colors.onBadge),
+	// derived convenience vars consumed by global LESS variables
+	'--theme-text-primary': toCssColor(theme.colors.onBackground),
+	'--theme-text-secondary': toCssColorWithAlpha(theme.colors.onSurface, 0.7),
+	'--theme-text-muted': toCssColorWithAlpha(theme.colors.onSurface, 0.45),
+	'--theme-border-color': toCssColor(theme.borders.cardBorder.color),
+	'--theme-accent-secondary': toCssColor(theme.colors.recordingScheduled),
+	'--theme-login-gradient-end': toCssColor(theme.colors.surfaceVariant),
+	// RGB triplet vars for use in rgba(var(...), opacity) syntax
+	'--theme-background-rgb': toRgbTriplet(theme.colors.background),
+	'--theme-surface-rgb': toRgbTriplet(theme.colors.surface),
+	'--theme-on-background-rgb': toRgbTriplet(theme.colors.onBackground),
+	'--theme-on-surface-rgb': toRgbTriplet(theme.colors.onSurface),
+	'--theme-accent-rgb': toRgbTriplet(theme.colors.accent),
+	'--theme-surface-variant-rgb': toRgbTriplet(theme.colors.surfaceVariant),
+	'--theme-scrim-rgb': toRgbTriplet(theme.colors.scrim)
+});

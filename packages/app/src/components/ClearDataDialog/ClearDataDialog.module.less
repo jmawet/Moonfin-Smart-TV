@@ -1,4 +1,4 @@
-@accent: var(--theme-accent, #00a4dc);
+@accent: #00a4dc;
 
 .overlay {
 	position: fixed;
@@ -10,37 +10,41 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	background: rgba(var(--theme-scrim-rgb, 0, 0, 0), 0.6);
+	background: rgba(0, 0, 0, 0.6);
 	animation: fadeIn 0.2s ease;
 }
 
 .dialog {
-	background: rgba(var(--theme-surface-rgb, 30, 30, 40), 0.85);
+	background: rgba(30, 30, 40, 0.85);
 	backdrop-filter: blur(32px) saturate(1.4);
 	-webkit-backdrop-filter: blur(32px) saturate(1.4);
-	border: 1px solid rgba(var(--theme-on-surface-rgb, 255, 255, 255), 0.12);
+	border: 1px solid rgba(255, 255, 255, 0.12);
 	border-radius: 24px;
 	padding: 40px 48px;
 	min-width: 420px;
 	max-width: 520px;
 	text-align: center;
 	box-shadow:
-		0 8px 32px rgba(var(--theme-scrim-rgb, 0, 0, 0), 0.4),
-		inset 0 1px 0 rgba(var(--theme-on-surface-rgb, 255, 255, 255), 0.08);
+		0 8px 32px rgba(0, 0, 0, 0.4),
+		inset 0 1px 0 rgba(255, 255, 255, 0.08);
 	animation: scaleIn 0.2s ease;
 }
 
 .title {
 	font-size: 30px;
 	font-weight: 600;
-	color: var(--theme-text-primary, #fff);
+	color: #fff;
 	margin: 0 0 12px;
 }
 
 .message {
 	font-size: 20px;
-	color: var(--theme-text-secondary, rgba(255, 255, 255, 0.6));
+	color: rgba(255, 255, 255, 0.6);
 	margin: 0 0 36px;
+}
+
+.preWrap {
+	white-space: pre-wrap;
 }
 
 .buttons {
@@ -58,8 +62,8 @@
 	outline: none !important;
 	border: 2px solid transparent;
 	min-width: 140px;
-	background: var(--theme-button-normal, rgba(255, 255, 255, 0.1));
-	color: var(--theme-on-button-normal, #fff);
+	background: rgba(255, 255, 255, 0.1);
+	color: #fff;
 
 	& + & {
 		margin-left: 16px;
@@ -70,14 +74,14 @@
 	}
 
 	&:hover {
-		background: var(--theme-button-active, rgba(255, 255, 255, 0.18));
+		background: rgba(255, 255, 255, 0.18);
 	}
 
 	&:focus {
-		background: var(--theme-button-focused, @accent);
-		border-color: var(--theme-focus-border-color, #fff);
-		color: var(--theme-on-button-focused, #fff);
-		box-shadow: var(--theme-focus-glow, 0 0 0 1px rgba(255, 255, 255, 0.15));
+		background: var(--accent-color, @accent);
+		border-color: #fff;
+		color: #fff;
+		box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15);
 	}
 }
 
@@ -85,7 +89,6 @@
 	&:focus {
 		background: var(--theme-recording-active, #c62828);
 		border-color: var(--theme-recording-active, #c62828);
-		color: var(--theme-on-badge, #fff);
 	}
 }
 

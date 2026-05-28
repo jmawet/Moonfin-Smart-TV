@@ -257,7 +257,7 @@
 .skipButton:hover,
 .skipButton:focus {
 	background: #fff;
-	border-color: var(--theme-accent, #00a4dc);
+	border-color: var(--accent-color, #00a4dc);
 	transform: scale(1.05);
 	box-shadow: 0 6px 16px rgba(0, 0, 0, 0.8);
 	outline: none;
@@ -319,38 +319,32 @@
 	padding: 40px 60px 60px;
 }
 
+/* Control Buttons */
+.controlButtons {
+	display: flex;
+	justify-content: flex-start;
+
+	> * + * {
+		margin-left: 20px;
+	}
+	align-items: center;
+	margin-bottom: 30px;
+}
+
 .controlButtonsBottom {
 	display: flex;
 	justify-content: flex-start;
-	flex-wrap: wrap;
 
 	> * + * {
-		margin-left: 12px;
+		margin-left: 20px;
 	}
 	align-items: center;
-	margin-top: 0;
-}
-
-.videoControlsRow {
-	display: flex;
-	align-items: center;
-	flex-wrap: wrap;
-	gap: 12px;
-}
-
-.transportButtons {
-	display: flex;
-	align-items: center;
-	flex-shrink: 0;
-
-	> * + * {
-		margin-left: 12px;
-	}
+	margin-top: 20px;
 }
 
 .controlBtn {
-	width: 84px;
-	height: 84px;
+	width: 110px;
+	height: 110px;
 	background: rgba(255, 255, 255, 0);
 	border: none;
 	border-radius: 50%;
@@ -363,57 +357,17 @@
 	color: #fff;
 	font-size: 32px;
 
-	svg,
-	img {
-		width: 38px;
-		height: 38px;
+	svg {
+		width: 48px;
+		height: 48px;
 	}
-
-	img {
-		display: block;
-		filter: brightness(0) saturate(100%) invert(100%);
-		transition: filter 0.2s ease;
-	}
-}
-
-.controlBtnWrapper {
-	position: relative;
-	display: flex;
-	justify-content: center;
-	align-items: center;
-}
-
-.focusTooltip {
-	position: absolute;
-	bottom: calc(100% + 8px);
-	left: 50%;
-	transform: translateX(-50%);
-	padding: 6px 12px;
-	border-radius: 8px;
-	background: rgba(0, 0, 0, 0.78);
-	border: 1px solid rgba(255, 255, 255, 0.45);
-	color: #fff;
-	font-size: 20px;
-	font-weight: 600;
-	line-height: 1.2;
-	white-space: nowrap;
-	pointer-events: none;
-	z-index: 3;
-	max-width: 280px;
-	overflow: hidden;
-	text-overflow: ellipsis;
 }
 
 .controlBtn:hover,
 .controlBtn:focus {
 	background: rgba(255, 255, 255, 1);
-	transform: scale(1.08);
+	transform: scale(1.15);
 	color: #333;
-}
-
-.controlBtn:hover img,
-.controlBtn:focus img {
-	filter: brightness(0) saturate(100%) invert(20%);
 }
 
 .controlBtn:disabled {
@@ -429,16 +383,12 @@
 .controlBtnDisabled:hover,
 .controlBtnDisabled:focus {
 	background: rgba(255, 255, 255, 0.3);
-	transform: scale(1.02);
+	transform: scale(1.05);
 	color: rgba(255, 255, 255, 0.5);
 	cursor: not-allowed;
 }
 
-.controlBtnDisabled:hover img,
-.controlBtnDisabled:focus img {
-	filter: brightness(0) saturate(100%) invert(100%);
-}
-
+/* Active state for toggle buttons (shuffle, repeat, favorite) */
 .controlBtnActive {
 	color: #00a4dc;
 }
@@ -477,7 +427,7 @@
 .progressBar {
 	position: relative;
 	height: 8px;
-	background: rgba(var(--theme-on-surface-rgb, 255, 255, 255), 0.18);
+	background: rgba(255, 255, 255, 0.3);
 	border-radius: 4px;
 	overflow: visible;
 	margin-bottom: 10px;
@@ -488,32 +438,16 @@
 
 .progressBar:focus {
 	height: 12px;
-	background: rgba(var(--theme-on-surface-rgb, 255, 255, 255), 0.3);
-	box-shadow: var(--theme-focus-glow, 0 0 0 3px rgba(var(--theme-accent-rgb, 0, 164, 220), 0.5));
-}
-
-.progressBuffered {
-	position: absolute;
-	top: 0;
-	left: 0;
-	height: 100%;
-	width: 0%;
-	background: var(--theme-seekbar-buffered, rgba(var(--theme-on-surface-rgb, 255, 255, 255), 0.45));
-	border-radius: 4px;
-	transition: width 0.15s linear;
-	z-index: 0;
+	background: rgba(255, 255, 255, 0.5);
+	box-shadow: 0 0 0 3px rgba(0, 164, 220, 0.5);
 }
 
 .progressFill {
-	position: absolute;
-	top: 0;
-	left: 0;
 	height: 100%;
-	background: var(--theme-range-progress, var(--theme-accent, #00a4dc));
+	background: var(--accent-color, #00a4dc);
 	width: 0%;
 	transition: width 0.1s linear;
 	border-radius: 4px;
-	z-index: 1;
 }
 
 .seekIndicator {
@@ -522,7 +456,7 @@
 	left: 0%;
 	width: 16px;
 	height: 16px;
-	background: var(--theme-range-thumb, #ffffff);
+	background: #ffffff;
 	border-radius: 50%;
 	transform: translate(-50%, -50%);
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
@@ -696,20 +630,6 @@
 			0 0 2px rgba(0, 0, 0, 0.9),
 			0 0 10px rgba(var(--theme-accent-rgb, 255, 46, 146), 0.45);
 	}
-
-	.castName {
-		color: var(--theme-accent, #ff2e92);
-		text-shadow: var(--theme-text-glow, 0 0 8px rgba(255, 46, 146, 0.35));
-	}
-
-	.castRole {
-		color: var(--theme-on-surface, #00e5ff);
-	}
-
-	.castCard:focus .castPhotoWrap {
-		border-color: var(--theme-accent, #ff2e92);
-		box-shadow: 0 0 10px rgba(var(--theme-accent-rgb, 255, 46, 146), 0.3);
-	}
 }
 
 .modalContent {
@@ -775,21 +695,21 @@
 .trackItem:hover,
 .trackItem:focus {
 	background: rgba(0, 164, 220, 0.3);
-	border-color: var(--theme-accent, #00a4dc);
+	border-color: var(--accent-color, #00a4dc);
 	transform: translateX(12px) scale(1.02);
 	box-shadow: 0 4px 15px rgba(0, 164, 220, 0.4);
 }
 
 .trackItem.selected {
 	background: rgba(0, 164, 220, 0.3);
-	border-color: var(--theme-accent, #00a4dc);
+	border-color: var(--accent-color, #00a4dc);
 	border-width: 3px;
 }
 
 .trackItem.selected::after {
 	content: '✓';
 	font-size: 28px;
-	color: var(--theme-accent, #00a4dc);
+	color: var(--accent-color, #00a4dc);
 	margin-left: 20px;
 	font-weight: 700;
 }
@@ -803,101 +723,6 @@
 .trackInfo {
 	font-size: 20px;
 	color: rgba(255, 255, 255, 0.7);
-}
-
-.castRow {
-	display: flex;
-	gap: 16px;
-	overflow-x: auto;
-	overflow-y: hidden;
-	padding: 8px 4px 12px;
-	scrollbar-width: none;
-	-ms-overflow-style: none;
-}
-
-.castRow::-webkit-scrollbar {
-	display: none;
-}
-
-.castCard {
-	min-width: 160px;
-	max-width: 160px;
-	padding: 0;
-	margin: 0;
-	background: transparent;
-	border: none;
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	text-align: center;
-	color: #fff;
-	transition: transform 0.2s ease;
-	outline: none;
-}
-
-.castCard:hover,
-.castCard:focus {
-	transform: scale(1.08);
-	z-index: 10;
-
-	.castPhotoWrap {
-		border-color: #ffffff;
-	}
-}
-
-.castPhotoWrap {
-	width: 140px;
-	height: 140px;
-	border-radius: 50%;
-	overflow: hidden;
-	background: rgba(255, 255, 255, 0.1);
-	margin-bottom: 10px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	border: 3px solid transparent;
-	transition: border-color 0.2s;
-}
-
-.castPhoto {
-	width: 100%;
-	height: 100%;
-	object-fit: cover;
-	display: block;
-}
-
-.castPhotoFallback {
-	width: 100%;
-	height: 100%;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	font-size: 48px;
-	font-weight: 600;
-	color: rgba(255, 255, 255, 0.3);
-	background: rgba(255, 255, 255, 0.05);
-}
-
-.castName {
-	font-size: 17px;
-	font-weight: 500;
-	line-height: 1.2;
-	max-width: 100%;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.castRole {
-	margin-top: 2px;
-	font-size: 15px;
-	font-weight: 500;
-	line-height: 1.2;
-	color: rgba(255, 255, 255, 0.5);
-	max-width: 100%;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
 }
 
 .lyricsModal {
@@ -981,7 +806,7 @@
 .chapterItem:hover,
 .chapterItem:focus {
 	background: rgba(0, 164, 220, 0.3);
-	border-color: var(--theme-accent, #00a4dc);
+	border-color: var(--accent-color, #00a4dc);
 	transform: scale(1.03) translateX(8px);
 	box-shadow: 0 6px 20px rgba(0, 164, 220, 0.5);
 }
@@ -994,7 +819,7 @@
 .chapterTime {
 	font-size: 26px;
 	font-weight: 700;
-	color: var(--theme-accent, #00a4dc);
+	color: var(--accent-color, #00a4dc);
 	min-width: 120px;
 	margin-right: 30px;
 }
@@ -1034,14 +859,14 @@
 }
 
 .infoSection:focus {
-	border-color: var(--theme-accent, #00a4dc);
+	border-color: var(--accent-color, #00a4dc);
 	background: rgba(0, 164, 220, 0.1);
 }
 
 .infoHeader {
 	font-size: 26px;
 	font-weight: 700;
-	color: var(--theme-accent, #00a4dc);
+	color: var(--accent-color, #00a4dc);
 	margin-bottom: 15px;
 	border-bottom: 2px solid rgba(0, 164, 220, 0.3);
 	padding-bottom: 10px;
@@ -1209,7 +1034,7 @@
 
 .nextPlayBtn:focus {
 	transform: scale(1.05);
-	background: var(--theme-accent, #00a4dc);
+	background: var(--accent-color, #00a4dc);
 	color: #fff;
 }
 
@@ -1232,7 +1057,7 @@
 
 .nextProgressFill {
 	height: 100%;
-	background: var(--theme-accent, #00a4dc);
+	background: var(--accent-color, #00a4dc);
 	border-radius: 0 0 0 8px;
 	animation: fillProgress var(--countdown-duration, 7s) linear forwards;
 }
@@ -1261,7 +1086,7 @@
 	width: 80px;
 	height: 80px;
 	border: 6px solid rgba(255, 255, 255, 0.2);
-	border-top-color: var(--theme-accent, #00a4dc);
+	border-top-color: var(--accent-color, #00a4dc);
 	border-radius: 50%;
 	animation: spin 1s linear infinite;
 }
@@ -1355,7 +1180,7 @@
 .offsetBtn:hover,
 .offsetBtn:focus {
 	background: rgba(0, 164, 220, 0.3);
-	border-color: var(--theme-accent, #00a4dc);
+	border-color: var(--accent-color, #00a4dc);
 	transform: scale(1.1);
 }
 
@@ -1395,7 +1220,7 @@
 .actionBtn:hover,
 .actionBtn:focus {
 	background: rgba(0, 164, 220, 0.3);
-	border-color: var(--theme-accent, #00a4dc);
+	border-color: var(--accent-color, #00a4dc);
 }
 
 .closeBtn {
@@ -1440,7 +1265,7 @@
 .settingItem:hover,
 .settingItem:focus {
 	background: rgba(0, 164, 220, 0.3);
-	border-color: var(--theme-accent, #00a4dc);
+	border-color: var(--accent-color, #00a4dc);
 	transform: scale(1.02);
 }
 
@@ -1452,7 +1277,7 @@
 
 .settingValue {
 	font-size: 24px;
-	color: var(--theme-accent, #00a4dc);
+	color: var(--accent-color, #00a4dc);
 	font-weight: 700;
 }
 
@@ -1474,7 +1299,7 @@
 
 .sliderItem:focus-within {
 	background: rgba(0, 164, 220, 0.15);
-	border-color: var(--theme-accent, #00a4dc);
+	border-color: var(--accent-color, #00a4dc);
 }
 
 .sliderLabel {
@@ -1488,13 +1313,13 @@
 }
 
 .sliderValue {
-	color: var(--theme-accent, #00a4dc);
+	color: var(--accent-color, #00a4dc);
 	font-weight: 700;
 }
 
 .settingsSlider {
 	width: 100%;
-	--slider-active-bg-color: var(--theme-accent, #00a4dc);
+	--slider-active-bg-color: var(--accent-color, #00a4dc);
 	--slider-knob-bg-color: #fff;
 }
 

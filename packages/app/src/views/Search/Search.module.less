@@ -1,5 +1,3 @@
-@import '../../styles/mixins.less';
-
 /* Search Container */
 .searchContainer {
 	position: absolute;
@@ -268,8 +266,8 @@
 	top: 8px;
 	right: 8px;
 	padding: 4px 8px;
-	.theme-chip();
 	background: rgba(var(--theme-scrim-rgb, 0, 0, 0), 0.75);
+	border-radius: 4px;
 	font-size: 12px;
 	color: var(--theme-text-primary, #ffffff);
 	font-weight: 500;
@@ -307,23 +305,5 @@
 .musicCard {
 	.musicImageWrapper {
 		padding-top: 100%; /* 1:1 square aspect ratio */
-	}
-}
-
-:global(html[data-theme-id='neon_pulse']) {
-	.rowTitle,
-	.cardTitle {
-		color: var(--theme-accent, #ff2e92);
-		text-shadow: var(--theme-text-glow, 0 0 8px rgba(255, 46, 146, 0.35));
-	}
-
-	.cardSubtitle,
-	.rowCount {
-		color: var(--theme-on-surface, #00e5ff);
-	}
-
-	.card:focus .cardImage {
-		border-color: var(--theme-accent, #ff2e92);
-		box-shadow: 0 0 10px rgba(var(--theme-accent-rgb, 255, 46, 146), 0.3);
 	}
 }

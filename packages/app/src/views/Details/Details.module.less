@@ -3,8 +3,6 @@
    Matching Plugin design, Enact-ready
    ============================================ */
 
-@import '../../styles/mixins.less';
-
 /* Page Container */
 .page {
 	position: fixed;
@@ -146,6 +144,7 @@
 
 /* Poster overlay badges */
 .posterBadgeWatched {
+	@import '../../styles/mixins.less';
 	.watched-badge(28px, 16px);
 	z-index: 2;
 }
@@ -166,7 +165,7 @@
 	svg {
 		width: 18px;
 		height: 18px;
-		fill: var(--theme-favorite-active, var(--theme-recording-active, #ff4757));
+		fill: var(--theme-accent, #00a4dc);
 	}
 }
 
@@ -191,9 +190,10 @@
 
 .episodeNumber {
 	font-size: 17px;
-	color: var(--theme-on-surface, rgba(255, 255, 255, 0.85));
+	color: var(--theme-text-muted, rgba(255, 255, 255, 0.5));
+	background: rgba(var(--theme-on-surface-rgb, 255, 255, 255), 0.1);
 	padding: 2px 10px;
-	.theme-chip();
+	border-radius: 4px;
 }
 
 /* ============================================
@@ -216,7 +216,7 @@
 	color: var(--theme-text-primary, #ffffff);
 	margin: 0;
 	line-height: 1.1;
-	text-shadow: var(--theme-text-glow, 0 0 0 transparent), 0 2px 8px rgba(0, 0, 0, 0.5);
+	text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 /* ============================================
@@ -269,13 +269,13 @@
 /* Media Badges */
 .badge {
 	padding: 4px 12px;
+	border-radius: 4px;
 	font-size: 14px;
 	font-weight: 700;
 	letter-spacing: 0.5px;
 	text-transform: uppercase;
 	display: inline-flex;
 	align-items: center;
-	.theme-chip();
 }
 
 .badge4k,
@@ -290,18 +290,18 @@
 .badgeContainer,
 .badgeAudioCodec,
 .badgeRating {
-	background: var(--theme-chip-background, var(--theme-badge-background, rgba(255, 255, 255, 0.7)));
+	background: var(--theme-badge-background, rgba(255, 255, 255, 0.7));
 	color: var(--theme-on-badge, #000);
 }
 
 .badgeContinuing {
-	background: var(--theme-status-available, rgba(8, 149, 98, 0.7));
-	color: var(--theme-on-badge, #fff);
+	background: rgba(8, 149, 98, 0.7);
+	color: #fff;
 }
 
 .badgeEnded {
 	background: var(--theme-recording-active, rgba(198, 40, 40, 0.85));
-	color: var(--theme-on-badge, #fff);
+	color: #fff;
 }
 
 /* ============================================
@@ -357,8 +357,7 @@
 
 	.btnDetail {
 		font-size: 13px;
-		color: rgba(255, 255, 255, 0.5);
-		color: var(--theme-text-secondary);
+		color: var(--theme-text-secondary, rgba(255, 255, 255, 0.5));
 		text-align: center;
 		max-width: 100px;
 		overflow: hidden;
@@ -370,8 +369,7 @@
 
 	&:focus {
 		.btnDetail {
-			color: rgba(255, 255, 255, 0.9);
-			color: var(--theme-text-primary);
+			color: var(--theme-text-primary, rgba(255, 255, 255, 0.9));
 			max-width: 160px;
 			white-space: normal;
 			word-wrap: break-word;
@@ -379,27 +377,23 @@
 		}
 
 		.btnAction {
-			background: rgba(255, 255, 255, 0.95);
-			background: var(--theme-button-focused);
+			background: var(--theme-button-focused, rgba(255, 255, 255, 0.95));
 			transform: scale(1.1);
-			border-color: #ffffff;
-			border-color: var(--theme-focus-border-color);
+			border-color: var(--theme-focus-border-color, #ffffff);
 
 			.btnIcon {
-				color: #0a0a0a;
-				color: var(--theme-on-button-focused);
-				fill: #0a0a0a;
-				fill: var(--theme-on-button-focused);
+				color: var(--theme-on-button-focused, #0a0a0a);
+				fill: var(--theme-on-button-focused, #0a0a0a);
 			}
 
 			.favorited {
-				color: var(--theme-favorite-active, var(--theme-recording-active, #ff4757));
-				fill: var(--theme-favorite-active, var(--theme-recording-active, #ff4757));
+				color: var(--theme-recording-active, #ff4757);
+				fill: var(--theme-recording-active, #ff4757);
 			}
 
 			.watched {
-				color: var(--theme-badge-watched, var(--theme-accent, #00a4dc));
-				fill: var(--theme-badge-watched, var(--theme-accent, #00a4dc));
+				color: var(--accent-color, #00a4dc);
+				fill: var(--accent-color, #00a4dc);
 			}
 		}
 	}
@@ -409,8 +403,7 @@
 	width: 80px;
 	height: 80px;
 	border-radius: 18px;
-	background: rgba(255, 255, 255, 0.08);
-	background: var(--theme-button-normal);
+	background: var(--theme-button-normal, rgba(255, 255, 255, 0.08));
 	border: 2px solid transparent;
 	display: flex;
 	align-items: center;
@@ -421,8 +414,7 @@
 .btnIcon {
 	width: 32px;
 	height: 32px;
-	color: #ffffff;
-	color: var(--theme-on-button-normal);
+	color: var(--theme-on-button-normal, #ffffff);
 	fill: currentColor;
 	display: flex;
 	align-items: center;
@@ -431,20 +423,19 @@
 }
 
 .favorited {
-	color: var(--theme-favorite-active, var(--theme-recording-active, #ff4757));
-	fill: var(--theme-favorite-active, var(--theme-recording-active, #ff4757));
+	color: var(--theme-recording-active, #ff4757);
+	fill: var(--theme-recording-active, #ff4757);
 }
 
 .watched {
-	color: var(--theme-badge-watched, var(--theme-accent, #00a4dc));
-	fill: var(--theme-badge-watched, var(--theme-accent, #00a4dc));
+	color: var(--accent-color, #00a4dc);
+	fill: var(--accent-color, #00a4dc);
 }
 
 .btnLabel {
 	font-size: 15px;
 	font-weight: 600;
-	color: rgba(255, 255, 255, 0.8);
-	color: var(--theme-text-primary);
+	color: var(--theme-text-primary, rgba(255, 255, 255, 0.8));
 	text-align: center;
 	max-width: 100px;
 	line-height: 1.3;
@@ -460,18 +451,15 @@
 	margin-bottom: 40px;
 	border-radius: 12px;
 	overflow: hidden;
-	background: rgba(37, 37, 37, 0.72);
-	background: rgba(var(--theme-surface-rgb), 0.72);
-	border: 1px solid rgba(255, 255, 255, 0.12);
-	border: 1px solid rgba(var(--theme-on-surface-rgb), 0.12);
+	background: rgba(255, 255, 255, 0.03);
+	border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .metadataCell {
 	display: flex;
 	flex-direction: column;
 	padding: 14px 20px;
-	border-right: 1px solid rgba(255, 255, 255, 0.12);
-	border-right: 1px solid rgba(var(--theme-on-surface-rgb), 0.12);
+	border-right: 1px solid rgba(255, 255, 255, 0.15);
 	flex: 1 1 0;
 	min-width: 0;
 	overflow: hidden;
@@ -489,7 +477,6 @@
 	font-size: 15px;
 	font-weight: 600;
 	color: rgba(255, 255, 255, 0.4);
-	color: var(--theme-text-muted);
 	text-transform: uppercase;
 	letter-spacing: 0.5px;
 }
@@ -497,7 +484,6 @@
 .metadataValue {
 	font-size: 19px;
 	color: rgba(255, 255, 255, 0.85);
-	color: var(--theme-on-surface);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -549,10 +535,7 @@
 .sectionTitle {
 	font-size: 28px;
 	font-weight: 600;
-	color: #ffffff;
-	color: var(--theme-text-primary);
-	text-shadow: none;
-	text-shadow: var(--theme-text-glow);
+	color: var(--theme-text-primary, #ffffff);
 	margin: 0;
 }
 
@@ -605,7 +588,7 @@
 	overflow: hidden;
 	border: 3px solid transparent;
 	transition: border-color 0.2s, box-shadow 0.2s;
-	background: rgba(var(--theme-on-surface-rgb, 255, 255, 255), 0.05);
+	background: rgba(255, 255, 255, 0.05);
 
 	img {
 		width: 100%;
@@ -623,7 +606,7 @@
 	text-align: center;
 	padding: 12px;
 	font-size: 17px;
-	color: var(--theme-text-secondary, rgba(255, 255, 255, 0.7));
+	color: rgba(255, 255, 255, 0.7);
 	background: linear-gradient(135deg, rgba(60, 60, 60, 0.8), rgba(40, 40, 40, 0.8));
 }
 
@@ -633,7 +616,7 @@
 	right: 8px;
 	width: 28px;
 	height: 28px;
-	background: var(--theme-badge-watched, rgba(var(--theme-accent-rgb, 0, 164, 220), 0.9));
+	background: rgba(var(--theme-accent-rgb, 0, 164, 220), 0.9);
 	border-radius: 50%;
 	display: flex;
 	align-items: center;
@@ -661,7 +644,7 @@
 	svg {
 		width: 18px;
 		height: 18px;
-		fill: var(--theme-favorite-active, var(--theme-recording-active, #ff4757));
+		fill: var(--theme-accent, #00a4dc);
 	}
 }
 
@@ -672,11 +655,11 @@
 	min-width: 24px;
 	height: 24px;
 	padding: 0 6px;
-	background: var(--theme-badge-unplayed, var(--theme-accent, #00a4dc));
+	background: var(--theme-accent, #00a4dc);
 	border-radius: 12px;
 	font-size: 14px;
 	font-weight: 700;
-	color: var(--theme-on-badge, #ffffff);
+	color: var(--theme-on-accent, #ffffff);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -736,7 +719,7 @@
 	align-items: center;
 	justify-content: center;
 	background: var(--theme-surface, #1a1a1a);
-	color: rgba(var(--theme-on-surface-rgb, 255, 255, 255), 0.15);
+	color: rgba(255, 255, 255, 0.15);
 
 	svg {
 		width: 40px;
@@ -757,7 +740,7 @@
 .nextUpTitle {
 	font-size: 18px;
 	font-weight: 600;
-	color: var(--theme-on-surface, rgba(255, 255, 255, 0.95));
+	color: rgba(255, 255, 255, 0.95);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -765,7 +748,7 @@
 
 .nextUpOverview {
 	font-size: 18px;
-	color: var(--theme-text-secondary, rgba(255, 255, 255, 0.55));
+	color: rgba(255, 255, 255, 0.55);
 	display: -webkit-box;
 	-webkit-line-clamp: 3;
 	-webkit-box-orient: vertical;
@@ -780,7 +763,7 @@
 	svg {
 		width: 40px;
 		height: 40px;
-		color: var(--theme-text-muted, rgba(255, 255, 255, 0.4));
+		color: rgba(255, 255, 255, 0.4);
 	}
 }
 
@@ -830,7 +813,7 @@
 	align-items: center;
 	justify-content: center;
 	background: var(--theme-surface, #1a1a1a);
-	color: rgba(var(--theme-on-surface-rgb, 255, 255, 255), 0.15);
+	color: rgba(255, 255, 255, 0.15);
 
 	svg {
 		width: 40px;
@@ -849,7 +832,7 @@
 
 .episodeProgressBar {
 	height: 100%;
-	background: var(--theme-range-progress, var(--theme-accent, #00a4dc));
+	background: var(--accent-color, #00a4dc);
 	border-radius: 0 2px 2px 0;
 }
 
@@ -1125,7 +1108,7 @@
 .seasonEpCheck {
 	width: 16px;
 	height: 16px;
-	color: var(--theme-accent, #00a4dc);
+	color: var(--accent-color, #00a4dc);
 }
 
 .seasonEpTitle {
@@ -1201,7 +1184,6 @@
 	overflow: hidden;
 	margin-bottom: 10px;
 	background: rgba(255, 255, 255, 0.05);
-	background: rgba(var(--theme-on-surface-rgb), 0.05);
 	border: 3px solid transparent;
 	transition: border-color 0.2s;
 }
@@ -1221,9 +1203,7 @@
 	font-size: 48px;
 	font-weight: 600;
 	color: rgba(255, 255, 255, 0.3);
-	color: var(--theme-text-muted);
 	background: rgba(255, 255, 255, 0.05);
-	background: rgba(var(--theme-on-surface-rgb), 0.05);
 }
 
 .castName {
@@ -1240,7 +1220,6 @@
 .castRole {
 	font-size: 15px;
 	color: rgba(255, 255, 255, 0.5);
-	color: var(--theme-text-muted);
 	text-align: center;
 	max-width: 100%;
 	overflow: hidden;
@@ -1298,16 +1277,7 @@
 	.title {
 		margin-bottom: 12px;
 	}
-	.overview {
-		max-height: 250px;
-		overflow-y: auto;
-		scrollbar-width: none;
 
-		&::-webkit-scrollbar {
-			display: none;
-		}
-	}
-}
 
 :global(html[data-theme-id='neon_pulse']) {
 	.backdropGradient {
@@ -1323,92 +1293,56 @@
 	.title,
 	.seasonDetailTitle,
 	.seasonEpTitle,
-	.seasonName,
-	.castName,
-	.nextUpTitle,
-	.episodeEpTitle {
+	.castName {
 		color: var(--theme-accent, #ff2e92);
 		text-shadow: var(--theme-text-glow, 0 0 8px rgba(255, 46, 146, 0.35));
 	}
 
 	.seriesName,
 	.infoItem,
-	.overview,
 	.seasonDetailSeries,
 	.seasonEpMeta,
 	.seasonEpOverview,
 	.castRole,
-	.nextUpOverview,
-	.episodeEpRuntime {
+	.overview,
+	.metaValue {
 		color: var(--theme-on-surface, #00e5ff);
-	}
-
-	.tagline,
-	.metadataLabel {
-		color: var(--theme-accent, #ff2e92);
 	}
 
 	.episodeNumber,
 	.infoBadge {
 		background: rgba(var(--theme-on-surface-rgb, 0, 229, 255), 0.15);
-		border: 1px solid rgba(var(--theme-accent-rgb, 255, 46, 146), 0.55);
+		border: 1px solid rgba(var(--theme-accent-rgb, 255, 46, 146), 0.5);
 		color: var(--theme-on-surface, #00e5ff);
-	}
-
-	.infoBadges .badge,
-	.badgeRating {
-		border: 1px solid var(--theme-accent, #ff2e92);
-	}
-
-	/* Alternate button wrapper color directly so icon + label + detail stay in sync */
-	.actionButtons > .btnWrapper,
-	.actionButtons > * .btnWrapper {
-		color: var(--theme-accent, #ff2e92);
-	}
-
-	.actionButtons > .btnWrapper:nth-child(even),
-	.actionButtons > :nth-child(even) .btnWrapper {
-		color: var(--theme-on-surface, #00e5ff);
-	}
-
-	.actionButtons .btnWrapper .btnIcon,
-	.actionButtons .btnWrapper .btnLabel,
-	.actionButtons .btnWrapper .btnDetail {
-		color: currentColor;
-		fill: currentColor;
-	}
-
-	.btnWrapper:focus {
-		color: var(--theme-accent, #ff2e92);
-	}
-
-	.btnWrapper:focus .btnAction {
-		background: rgba(var(--theme-accent-rgb, 255, 46, 146), 0.22);
-		border-color: var(--theme-accent, #ff2e92);
-		box-shadow: 0 0 14px rgba(var(--theme-accent-rgb, 255, 46, 146), 0.45);
-	}
-
-	.btnWrapper:focus .btnIcon,
-	.btnWrapper:focus .btnLabel,
-	.btnWrapper:focus .btnDetail {
-		color: var(--theme-accent, #ff2e92);
-		fill: var(--theme-accent, #ff2e92);
-	}
-
-	.seasonCard:focus .seasonPosterWrapper,
-	.nextUpCard:focus,
-	.episodeCard:focus,
-	.castCard:focus .castImageWrapper,
-	.seasonEp:focus {
-		border-color: var(--theme-accent, #ff2e92);
-		box-shadow: 0 0 12px rgba(var(--theme-accent-rgb, 255, 46, 146), 0.35);
 	}
 
 	.poster,
+	.seasonEp,
 	.castImageWrapper,
 	.personPhoto {
 		border-color: rgba(var(--theme-accent-rgb, 255, 46, 146), 0.45);
 		box-shadow: 0 0 14px rgba(var(--theme-accent-rgb, 255, 46, 146), 0.2);
+	}
+
+	.btnAction {
+		border: 1px solid rgba(var(--theme-accent-rgb, 255, 46, 146), 0.5);
+		box-shadow: 0 0 10px rgba(var(--theme-accent-rgb, 255, 46, 146), 0.2);
+	}
+
+	.btnLabel,
+	.btnDetail,
+	.metaLabel {
+		color: var(--theme-on-surface, #00e5ff);
+	}
+}
+	.overview {
+		max-height: 250px;
+		overflow-y: auto;
+		scrollbar-width: none;
+
+		&::-webkit-scrollbar {
+			display: none;
+		}
 	}
 }
 
@@ -1742,7 +1676,7 @@
 	svg {
 		width: 20px;
 		height: 20px;
-		fill: var(--theme-accent, #00a4dc);
+		fill: var(--accent-color, #00a4dc);
 	}
 }
 
