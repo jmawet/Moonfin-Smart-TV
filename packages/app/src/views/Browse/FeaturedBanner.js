@@ -3,14 +3,25 @@ import Spottable from '@enact/spotlight/Spottable';
 import Spotlight from '@enact/spotlight';
 import $L from '@enact/i18n/$L';
 import {getImageUrl, getBackdropId, formatDuration} from '../../utils/helpers';
+import {buildQueryString} from '../../utils/urlCompat';
+import {stopPlaybackForTrailer} from '../../utils/trailerPlayback';
 import RatingsRow from '../../components/RatingsRow';
-import {createApiForServer} from '../../services/jellyfinApi';
+import {createApiForServer, getApiKey, getServerUrl as getDefaultServerUrl} from '../../services/jellyfinApi';
 import {KEYS} from '../../utils/keys';
 import css from './Browse.module.less';
 
 const FEATURED_GENRES_LIMIT = 3;
 const PRELOAD_ADJACENT_SLIDES = 2;
 const TRAILER_REVEAL_MS = 4000;
+const LOCAL_TRAILER_STREAM_PARAMS = {
+	Static: 'false',
+	videoCodec: 'h264',
+	audioCodec: 'aac',
+	maxVideoBitDepth: '8',
+	audioBitRate: '128000',
+	audioChannels: '2',
+	subtitleMethod: 'Drop'
+};
 
 const SpottableDiv = Spottable('div');
 const SpottableButton = Spottable('button');
@@ -162,10 +173,39 @@ const FeaturedBanner = memo(({
 		}
 	}, [api]);
 
+	const getLocalTrailerStreamUrlForItem = useCallback(async (item) => {
+		if (!item?.Id) return null;
+
+		try {
+			const serverApi = item._serverUrl && item._serverAccessToken
+				? createApiForServer(item._serverUrl, item._serverAccessToken, item._serverUserId)
+				: api;
+			if (!serverApi?.getLocalTrailers) return null;
+
+			const trailers = await serverApi.getLocalTrailers(item.Id);
+			const trailerItems = Array.isArray(trailers?.Items) ? trailers.Items : Array.isArray(trailers) ? trailers : [];
+			const trailerId = trailerItems.find((t) => t?.Id)?.Id;
+			if (!trailerId) return null;
+
+			const resolvedServerUrl = item._serverUrl || serverUrl || getDefaultServerUrl();
+			if (!resolvedServerUrl) return null;
+
+			const resolvedToken = item._serverAccessToken || getApiKey();
+			const params = {
+				...LOCAL_TRAILER_STREAM_PARAMS,
+				...(resolvedToken ? {ApiKey: resolvedToken} : {})
+			};
+			return `${resolvedServerUrl}/Videos/${encodeURIComponent(trailerId)}/stream?${buildQueryString(params)}`;
+		} catch {
+			return null;
+		}
+	}, [api, serverUrl]);
+
 	const startTrailerPreview = useCallback(async (videoId, directUrl = null) => {
 		const requestId = videoId || directUrl || null;
 		trailerStateRef.current = 'resolving';
 		trailerVideoIdRef.current = requestId;
+		await stopPlaybackForTrailer(trailerVideoRef.current);
 
 		const [{fetchSponsorSegments, fetchVideoStreamUrl, getTrailerStartTime}, {getSharedVideoElement}] = await Promise.all([
 			import('../../services/youtubeTrailer'),
@@ -285,12 +325,18 @@ const FeaturedBanner = memo(({
 				const {extractYouTubeId, extractYouTubeIdFromUrl} = await import('../../services/youtubeTrailer');
 				if (cancelled) return;
 
-				let resolvedVideoId = extractYouTubeId(currentFeatured);
-				let directUrl = null;
-				const remoteTrailers = await getRemoteTrailersForItem(currentFeatured);
+				let resolvedVideoId = null;
+				let directUrl = await getLocalTrailerStreamUrlForItem(currentFeatured);
 				if (cancelled) return;
 
-				if (!resolvedVideoId && remoteTrailers.length > 0) {
+				if (!directUrl) {
+					resolvedVideoId = extractYouTubeId(currentFeatured);
+				}
+
+				if (!directUrl && !resolvedVideoId) {
+					const remoteTrailers = await getRemoteTrailersForItem(currentFeatured);
+					if (cancelled) return;
+
 					for (let i = 0; i < remoteTrailers.length; i++) {
 						const trailerUrl = remoteTrailers[i]?.Url || remoteTrailers[i]?.url || '';
 						if (!trailerUrl) continue;
@@ -323,7 +369,7 @@ const FeaturedBanner = memo(({
 			cancelled = true;
 			stopTrailer();
 		};
-	}, [currentIndex, currentFeatured, isVisible, settings.featuredTrailerPreview, getRemoteTrailersForItem, startTrailerPreview, stopTrailer]);
+	}, [currentIndex, currentFeatured, isVisible, settings.featuredTrailerPreview, getLocalTrailerStreamUrlForItem, getRemoteTrailersForItem, startTrailerPreview, stopTrailer]);
 
 	useEffect(() => {
 		const handleVisibility = () => {

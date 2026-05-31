@@ -153,6 +153,8 @@ export const api = {
 
 	getItem: (itemId) => request(`/Users/${currentUser}/Items/${itemId}`),
 
+	getLocalTrailers: (itemId) => request(`/Users/${currentUser}/Items/${itemId}/LocalTrailers`),
+
 	getItemForDetail: (itemId) =>
 		request(`/Users/${currentUser}/Items/${itemId}?Fields=Overview,Genres,OfficialRating,BackdropImageTags,ParentBackdropImageTags,ParentBackdropItemId,ProviderIds,RunTimeTicks,ProductionYear,Chapters`),
 
@@ -586,6 +588,9 @@ export const createApiForServer = (serverUrl, token, userId) => {
 
 		getPlaybackInfo: (itemId) =>
 			serverRequest(`/Items/${itemId}/PlaybackInfo?UserId=${userId}`),
+
+		getLocalTrailers: (itemId) =>
+			serverRequest(`/Users/${userId}/Items/${itemId}/LocalTrailers`),
 
 		getInstalledPlugins: () => serverRequest('/Plugins'),
 

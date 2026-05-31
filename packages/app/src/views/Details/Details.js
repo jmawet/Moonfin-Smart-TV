@@ -15,6 +15,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import RatingsRow from '../../components/RatingsRow';
 import {formatDuration, getImageUrl, getBackdropId, getLogoUrl} from '../../utils/helpers';
 import {KEYS, isBackKey} from '../../utils/keys';
+import {stopPlaybackForTrailer} from '../../utils/trailerPlayback';
 import {fetchVideoStreamUrl, extractYouTubeIdFromUrl} from '../../services/youtubeTrailer';
 import {formatTime} from '../Player/PlayerConstants';
 import AddToPlaylistModal from '../../components/AddToPlaylistModal';
@@ -193,6 +194,7 @@ const Details = ({itemId, initialItem, onPlay, onSelectItem, onSelectPerson, onI
 	const pageScrollerRef = useRef(null);
 	const pageScrollToRef = useRef(null);
 	const lastFocusedElementRef = useRef(null);
+	const trailerVideoRef = useRef(null);
 
 	// Data loading
 	useEffect(() => {
@@ -500,19 +502,53 @@ const Details = ({itemId, initialItem, onPlay, onSelectItem, onSelectPerson, onI
 	}, [item, onPlay]);
 
 	const handleTrailer = useCallback(() => {
-		if (item?.LocalTrailerCount > 0) {
-			onPlay?.(item, false, false, true);
-		} else if (item?.RemoteTrailers?.length > 0) {
-			const trailerUrl = item.RemoteTrailers[0].Url || '';
-			const videoId = extractYouTubeIdFromUrl(trailerUrl);
-			if (videoId) {
-				setTrailerOverlay(videoId);
-				window.requestAnimationFrame(() => Spotlight.focus('trailer-close-btn'));
-			} else if (trailerUrl) {
-				window.open(trailerUrl, '_blank');
+		const openTrailer = async () => {
+			if (!item?.Id) return;
+			await stopPlaybackForTrailer(trailerVideoRef.current);
+
+			try {
+				if (effectiveApi?.getLocalTrailers) {
+					const localResult = await effectiveApi.getLocalTrailers(item.Id);
+					const localItems = Array.isArray(localResult?.Items)
+						? localResult.Items
+						: (Array.isArray(localResult) ? localResult : []);
+					const localTrailer = localItems.find((t) => t?.Id);
+
+					if (localTrailer) {
+						const trailerItem = {
+							...localTrailer,
+							_serverUrl: item._serverUrl,
+							_serverAccessToken: item._serverAccessToken,
+							_serverUserId: item._serverUserId,
+							_serverName: item._serverName,
+							_serverId: item._serverId
+						};
+						onPlay?.(trailerItem, false, {});
+						return;
+					}
+				}
+				} catch (err) { void err; }
+
+			if (item?.RemoteTrailers?.length > 0) {
+				for (let i = 0; i < item.RemoteTrailers.length; i++) {
+					const trailerUrl = item.RemoteTrailers[i]?.Url || item.RemoteTrailers[i]?.url || '';
+					if (!trailerUrl) continue;
+
+					const videoId = extractYouTubeIdFromUrl(trailerUrl);
+					if (videoId) {
+						setTrailerOverlay(videoId);
+						window.requestAnimationFrame(() => Spotlight.focus('trailer-close-btn'));
+						return;
+					}
+
+					window.open(trailerUrl, '_blank');
+					return;
+				}
 			}
-		}
-	}, [item, onPlay]);
+		};
+
+		openTrailer();
+	}, [effectiveApi, item, onPlay]);
 
 	const handleToggleFavorite = useCallback(async () => {
 		if (!item) return;
@@ -554,8 +590,6 @@ const Details = ({itemId, initialItem, onPlay, onSelectItem, onSelectPerson, onI
 	const handleCloseMediaInfo = useCallback(() => setShowMediaInfo(false), []);
 	const handleOpenMediaInfo = useCallback(() => setShowMediaInfo(true), []);
 	const handleStopPropagation = useCallback((e) => e.stopPropagation(), []);
-
-	const trailerVideoRef = useRef(null);
 
 	const handleCloseTrailer = useCallback(() => {
 		if (trailerVideoRef.current) {
