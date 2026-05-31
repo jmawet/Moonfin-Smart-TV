@@ -23,7 +23,11 @@ import css from './Settings.module.less';
 
 const SpottableDiv = Spottable('div');
 const SpottableButton = Spottable('button');
-const ViewContainer = SpotlightContainerDecorator({enterTo: 'last-focused', restrict: 'self-only'}, 'div');
+const ViewContainer = SpotlightContainerDecorator({
+	enterTo: 'last-focused',
+	restrict: 'self-only',
+	leaveFor: {left: '', right: '', up: '', down: ''}
+}, 'div');
 
 const IconGeneral = () => (
 	<svg viewBox='0 0 24 24' fill='currentColor'>
@@ -461,6 +465,9 @@ const FAVORITES_ROW_IDS = [
 	'favoriteSongs'
 ];
 
+const INITIAL_PLUGIN_SECTION_RENDER_COUNT = 60;
+const PLUGIN_SECTION_RENDER_STEP = 60;
+
 const isHomeRowVisibleByGates = (rowId, currentSettings) => {
 	if (FAVORITES_ROW_IDS.includes(rowId)) return currentSettings.displayFavoritesRows;
 	if (rowId === 'collections') return currentSettings.displayCollectionsRows;
@@ -634,6 +641,12 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 	const [tempExcludedGenresText, setTempExcludedGenresText] = useState('');
 	const [tempPinCode, setTempPinCode] = useState('0000');
 	const [pinCodeError, setPinCodeError] = useState('');
+	const [pluginSectionRenderLimit, setPluginSectionRenderLimit] = useState(INITIAL_PLUGIN_SECTION_RENDER_COUNT);
+	const [mediaBarLibraries, setMediaBarLibraries] = useState([]);
+	const [mediaBarCollections, setMediaBarCollections] = useState([]);
+	const [tempMediaBarLibraryIds, setTempMediaBarLibraryIds] = useState([]);
+	const [tempMediaBarCollectionIds, setTempMediaBarCollectionIds] = useState([]);
+	const [mediaBarSourcesLoading, setMediaBarSourcesLoading] = useState(false);
 
 	useEffect(() => {
 		const timer = setTimeout(() => {
@@ -666,6 +679,10 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 				Spotlight.focus('excluded-genres-input');
 			} else if (cv.view === 'pinCode') {
 				Spotlight.focus('pin-code-input');
+			} else if (cv.view === 'mediaBarLibraries') {
+				Spotlight.focus('media-bar-libraries-view');
+			} else if (cv.view === 'mediaBarCollections') {
+				Spotlight.focus('media-bar-collections-view');
 			}
 		}, 50);
 		return () => clearTimeout(timer);
@@ -885,6 +902,67 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 		popView();
 	}, [tempPinCode, updateSetting, popView]);
 
+	const openMediaBarLibraries = useCallback(async () => {
+		pushView({view: 'mediaBarLibraries', returnFocusTo: 'setting-sourceLibraries'});
+		setMediaBarSourcesLoading(true);
+		setTempMediaBarLibraryIds(Array.isArray(settings.mediaBarLibraryIds) ? [...settings.mediaBarLibraryIds] : []);
+		try {
+			const viewsResult = await api.getAllLibraries();
+			const libs = (viewsResult?.Items || []).filter((lib) => lib?.CollectionType);
+			setMediaBarLibraries(libs);
+		} catch (err) {
+			void err;
+			setMediaBarLibraries([]);
+		} finally {
+			setMediaBarSourcesLoading(false);
+		}
+	}, [api, pushView, settings.mediaBarLibraryIds]);
+
+	const openMediaBarCollections = useCallback(async () => {
+		pushView({view: 'mediaBarCollections', returnFocusTo: 'setting-sourceCollections'});
+		setMediaBarSourcesLoading(true);
+		setTempMediaBarCollectionIds(Array.isArray(settings.mediaBarCollectionIds) ? [...settings.mediaBarCollectionIds] : []);
+		try {
+			const result = await api.getCollections(500, 'SortName', 'Ascending');
+			setMediaBarCollections(result?.Items || []);
+		} catch (err) {
+			void err;
+			setMediaBarCollections([]);
+		} finally {
+			setMediaBarSourcesLoading(false);
+		}
+	}, [api, pushView, settings.mediaBarCollectionIds]);
+
+	const toggleMediaBarLibrary = useCallback((libraryId) => {
+		setTempMediaBarLibraryIds((prev) => {
+			if (prev.includes(libraryId)) return prev.filter((id) => id !== libraryId);
+			return [...prev, libraryId];
+		});
+	}, []);
+
+	const toggleMediaBarCollection = useCallback((collectionId) => {
+		setTempMediaBarCollectionIds((prev) => {
+			if (prev.includes(collectionId)) return prev.filter((id) => id !== collectionId);
+			return [...prev, collectionId];
+		});
+	}, []);
+
+	const saveMediaBarLibraries = useCallback(() => {
+		updateSettings({
+			mediaBarSourceType: 'library',
+			mediaBarLibraryIds: tempMediaBarLibraryIds
+		});
+		popView();
+	}, [tempMediaBarLibraryIds, updateSettings, popView]);
+
+	const saveMediaBarCollections = useCallback(() => {
+		updateSettings({
+			mediaBarSourceType: 'collection',
+			mediaBarCollectionIds: tempMediaBarCollectionIds
+		});
+		popView();
+	}, [tempMediaBarCollectionIds, updateSettings, popView]);
+
 	const refreshBuiltInCollectionGenreSections = useCallback(async () => {
 		const collectionsSortBy = settings.collectionsRowSortBy || 'SortName';
 		const collectionsSortOrder = getSortOrderFromSortBy(collectionsSortBy);
@@ -943,6 +1021,7 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 	const openHomeRows = useCallback(() => {
 		setTempHomeRows([...(settings.homeRows || DEFAULT_HOME_ROWS)].sort((a, b) => a.order - b.order));
 		setTempPluginSections(getMergedPluginSectionsForEditor());
+		setPluginSectionRenderLimit(INITIAL_PLUGIN_SECTION_RENDER_COUNT);
 		pushView({ view: 'homeRows', returnFocusTo: 'setting-homeRows' });
 
 		refreshBuiltInCollectionGenreSections()
@@ -1446,8 +1525,24 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 			{renderOptionItem('featuredBarStyle', $L('Bar Style'), getFeaturedBarStyleOptions(), $L('Moonfin'), 'appscontents')}
 			{renderOptionItem('featuredContentType', $L('Content Type'), getContentTypeOptions(), $L('Movies & TV Shows'), 'list')}
 			{renderOptionItem('featuredItemCount', $L('Item Count'), getFeaturedItemCountOptions(), $L('10 items'), 'list')}
-			{renderNavItem('sourceLibraries', $L('Source Libraries'), $L('Choose source libraries for media bar'), () => {}, 'folder')}
-			{renderNavItem('sourceCollections', $L('Source Collections'), $L('Choose source collections for media bar'), () => {}, 'bookmark')}
+			{renderNavItem(
+				'sourceLibraries',
+				$L('Source Libraries'),
+				(Array.isArray(settings.mediaBarLibraryIds) && settings.mediaBarLibraryIds.length > 0)
+					? $L('{count} selected').replace('{count}', String(settings.mediaBarLibraryIds.length))
+					: $L('All libraries'),
+				openMediaBarLibraries,
+				'folder'
+			)}
+			{renderNavItem(
+				'sourceCollections',
+				$L('Source Collections'),
+				(Array.isArray(settings.mediaBarCollectionIds) && settings.mediaBarCollectionIds.length > 0)
+					? $L('{count} selected').replace('{count}', String(settings.mediaBarCollectionIds.length))
+					: $L('All collections'),
+				openMediaBarCollections,
+				'bookmark'
+			)}
 			{renderNavItem(
 				'excludedGenres',
 				$L('Excluded Genres'),
@@ -2145,23 +2240,25 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 									onClick={() => moveHomeRowUp(row.id)}
 									disabled={index === 0}
 									size='small'
-									icon='arrowlargeup'
 									spotlightId={`homerow-up-${row.id}`}
-								/>
+								>
+									{$L('Up')}
+								</Button>
 								<Button
 									onClick={() => moveHomeRowDown(row.id)}
 									disabled={index === visibleRows.length - 1}
 									size='small'
-									icon='arrowlargedown'
 									spotlightId={`homerow-down-${row.id}`}
-								/>
+								>
+									{$L('Down')}
+								</Button>
 							</div>
 						</div>
 					))}
 					{tempPluginSections.length > 0 && (
 						<>
 							{renderSectionTitle($L('Plugin Sections'))}
-							{tempPluginSections.map((section, index) => (
+							{tempPluginSections.slice(0, pluginSectionRenderLimit).map((section, index) => (
 								<div key={section.id} className={css.homeRowItem}>
 									<SpottableDiv
 										className={css.listItem}
@@ -2179,19 +2276,32 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 											onClick={() => movePluginSectionUp(section.id)}
 											disabled={index === 0}
 											size='small'
-											icon='arrowlargeup'
 											spotlightId={`pluginrow-up-${section.id}`}
-										/>
+										>
+											{$L('Up')}
+										</Button>
 										<Button
 											onClick={() => movePluginSectionDown(section.id)}
 											disabled={index === tempPluginSections.length - 1}
 											size='small'
-											icon='arrowlargedown'
 											spotlightId={`pluginrow-down-${section.id}`}
-										/>
+										>
+											{$L('Down')}
+										</Button>
 									</div>
 								</div>
 							))}
+							{tempPluginSections.length > pluginSectionRenderLimit && (
+								<div className={css.actionBar}>
+									<Button
+										onClick={() => setPluginSectionRenderLimit((prev) => Math.min(tempPluginSections.length, prev + PLUGIN_SECTION_RENDER_STEP))}
+										size='small'
+										spotlightId='pluginrow-show-more'
+									>
+										{$L('Show More')} ({tempPluginSections.length - pluginSectionRenderLimit})
+									</Button>
+								</div>
+							)}
 						</>
 					)}
 					<div className={css.actionBar}>
@@ -2362,6 +2472,99 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 			</div>
 		</ViewContainer>
 	);
+
+	const renderMediaBarSourceView = ({
+		viewSpotlightId,
+		title,
+		description,
+		loadingLabel,
+		items,
+		itemIdKey,
+		itemNameKey,
+		selectedIds,
+		toggleSelection,
+		cancelSpotlightId,
+		saveSpotlightId,
+		onSave,
+		itemSpotlightPrefix
+	}) => (
+		<ViewContainer className={css.viewContainer} spotlightId={viewSpotlightId}>
+			<div className={css.listContent} onFocus={handleListFocus}>
+				<div className={css.listInner}>
+					{renderSectionTitle(title)}
+					<div className={css.viewDescription}>{description}</div>
+					{mediaBarSourcesLoading ? (
+						<div className={css.loadingMessage}>{loadingLabel}</div>
+					) : (
+						items.map((item) => {
+							const itemId = item[itemIdKey];
+							const itemName = item[itemNameKey];
+							const isSelected = selectedIds.includes(itemId);
+							return (
+								<SpottableDiv
+									key={itemId}
+									className={css.listItem}
+									onClick={() => toggleSelection(itemId)}
+									spotlightId={`${itemSpotlightPrefix}-${itemId}`}
+								>
+									<div className={css.listItemBody}>
+										<div className={css.listItemHeading}>{itemName}</div>
+									</div>
+									<div className={css.listItemTrailing}>{renderToggle(isSelected)}</div>
+								</SpottableDiv>
+							);
+						})
+					)}
+					{!mediaBarSourcesLoading && (
+						<div className={css.actionBar}>
+							<Button onClick={popView} size='small' spotlightId={cancelSpotlightId}>
+								{$L('Cancel')}
+							</Button>
+							<Button onClick={onSave} size='small' spotlightId={saveSpotlightId}>
+								{$L('Save')}
+							</Button>
+						</div>
+					)}
+				</div>
+			</div>
+		</ViewContainer>
+	);
+
+	const renderMediaBarLibrariesView = () => (
+		renderMediaBarSourceView({
+			viewSpotlightId: 'media-bar-libraries-view',
+			title: $L('Media Bar Source Libraries'),
+			description: $L('Choose which libraries are used for featured media when source type is Libraries.'),
+			loadingLabel: $L('Loading libraries...'),
+			items: mediaBarLibraries,
+			itemIdKey: 'Id',
+			itemNameKey: 'Name',
+			selectedIds: tempMediaBarLibraryIds,
+			toggleSelection: toggleMediaBarLibrary,
+			cancelSpotlightId: 'media-bar-lib-cancel',
+			saveSpotlightId: 'media-bar-lib-save',
+			onSave: saveMediaBarLibraries,
+			itemSpotlightPrefix: 'media-bar-lib'
+		})
+	);
+
+	const renderMediaBarCollectionsView = () => (
+		renderMediaBarSourceView({
+			viewSpotlightId: 'media-bar-collections-view',
+			title: $L('Media Bar Source Collections'),
+			description: $L('Choose which collections are used for featured media when source type is Collections.'),
+			loadingLabel: $L('Loading collections...'),
+			items: mediaBarCollections,
+			itemIdKey: 'Id',
+			itemNameKey: 'Name',
+			selectedIds: tempMediaBarCollectionIds,
+			toggleSelection: toggleMediaBarCollection,
+			cancelSpotlightId: 'media-bar-collection-cancel',
+			saveSpotlightId: 'media-bar-collection-save',
+			onSave: saveMediaBarCollections,
+			itemSpotlightPrefix: 'media-bar-collection'
+		})
+	);
 	/* eslint-enable react/jsx-no-bind */
 
 	return (
@@ -2376,6 +2579,8 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 			{currentView.view === 'excludedGenres' && renderExcludedGenresView()}
 			{currentView.view === 'pinCode' && renderPinCodeView()}
 			{currentView.view === 'libraries' && renderLibrariesView()}
+			{currentView.view === 'mediaBarLibraries' && renderMediaBarLibrariesView()}
+			{currentView.view === 'mediaBarCollections' && renderMediaBarCollectionsView()}
 			<ClearDataDialog
 				open={clearDataDialogOpen}
 				onCancel={() => setClearDataDialogOpen(false)} // eslint-disable-line react/jsx-no-bind

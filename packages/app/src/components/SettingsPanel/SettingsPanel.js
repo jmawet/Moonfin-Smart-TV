@@ -4,7 +4,11 @@ import Settings from '../../views/Settings';
 
 import css from './SettingsPanel.module.less';
 
-const PanelContainer = SpotlightContainerDecorator({enterTo: 'last-focused', restrict: 'self-only'}, 'div');
+const PanelContainer = SpotlightContainerDecorator({
+	enterTo: 'last-focused',
+	restrict: 'self-only',
+	leaveFor: {left: '', right: '', up: '', down: ''}
+}, 'div');
 
 const SettingsPanel = ({onClose, onLibrariesChanged}) => {
 	const handleScrimClick = useCallback(() => {
