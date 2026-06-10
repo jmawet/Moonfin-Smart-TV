@@ -972,6 +972,10 @@ const AppContent = (props) => {
 							onSelectItem={handleSelectItem}
 							onSelectLibrary={handleSelectLibrary}
 							onSelectGenre={handleSelectGenreFromBrowse}
+							onSelectSeerrItem={handleSelectJellyseerrItem}
+							onSelectSeerrGenre={handleSelectJellyseerrGenre}
+							onSelectSeerrStudio={handleSelectJellyseerrStudio}
+							onSelectSeerrNetwork={handleSelectJellyseerrNetwork}
 							isVisible={panelIndex === PANELS.BROWSE && !showSettingsPanel}
 							onFocusItemThemeMusic={themeMusic.playThemeMusicDelayed}
 							onBlurItemThemeMusic={themeMusic.cancelDelayed}

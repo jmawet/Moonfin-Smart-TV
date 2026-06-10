@@ -21,6 +21,19 @@ const DEFAULT_HOME_ROWS = [
 	{id: 'genres', name: 'Genres', enabled: false, order: 13}
 ];
 
+const DEFAULT_SEERR_HOME_ROWS = [
+	{id: 'myRequests', enabled: false},
+	{id: 'trending', enabled: false},
+	{id: 'popularMovies', enabled: false},
+	{id: 'popularTv', enabled: false},
+	{id: 'upcomingMovies', enabled: false},
+	{id: 'upcomingTv', enabled: false},
+	{id: 'genreMovies', enabled: false},
+	{id: 'genreTv', enabled: false},
+	{id: 'studios', enabled: false},
+	{id: 'networks', enabled: false}
+];
+
 const defaultSettings = {
 	preferTranscode: false,
 	forceDirectPlay: false,
@@ -133,13 +146,14 @@ const defaultSettings = {
 	eac3Passthrough: true,
 	truehdPassthrough: true,
 	blockedRatings: [],
-	jellyseerrRows: null,
+	seerrHomeRows: DEFAULT_SEERR_HOME_ROWS,
+	showSeerrButton: true,
 	focusBorderColor: '',
 	navbarOpacity: 100,
 	navbarColor: ''
 };
 
-export {DEFAULT_HOME_ROWS};
+export {DEFAULT_HOME_ROWS, DEFAULT_SEERR_HOME_ROWS};
 
 const SERVER_TO_LOCAL = {
 	mediaBarEnabled: 'showFeaturedBar',
@@ -272,7 +286,8 @@ const SYNCABLE_KEYS = [
 	'videoStartDelay', 'liveTvDirect',
 	'uiLanguage',
 	'blockedRatings',
-	'jellyseerrRows',
+	'seerrHomeRows',
+	'showSeerrButton',
 	'focusBorderColor',
 	'navbarOpacity',
 	'navbarColor',

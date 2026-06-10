@@ -3,7 +3,10 @@ import Spotlight from '@enact/spotlight';
 import $L from '@enact/i18n/$L';
 import {useAuth} from '../../context/AuthContext';
 import {useSettings} from '../../context/SettingsContext';
+import {useJellyseerr} from '../../context/JellyseerrContext';
 import {ClassicMediaRow, ModernMediaRow} from '../../components/MediaRow';
+import SeerrTileRow from '../../components/SeerrTileRow';
+import {getSeerrHomeRowConfigs, fetchSeerrHomeRow} from '../../utils/seerrHomeRows';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import {getImageUrl, getBackdropId, getLogoUrl} from '../../utils/helpers';
 import {getFromStorage, saveToStorage} from '../../services/storage';
@@ -228,6 +231,10 @@ const Browse = ({
 	onSelectItem,
 	onSelectLibrary,
 	onSelectGenre,
+	onSelectSeerrItem,
+	onSelectSeerrGenre,
+	onSelectSeerrStudio,
+	onSelectSeerrNetwork,
 	isVisible = true,
 	onFocusItemThemeMusic,
 	onBlurItemThemeMusic,
@@ -235,6 +242,9 @@ const Browse = ({
 }) => {
 	const {api, serverUrl, accessToken, hasMultipleServers, user} = useAuth();
 	const {settings, activeTheme} = useSettings();
+	const {isEnabled: jellyseerrEnabled, isAuthenticated: jellyseerrAuthenticated, user: jellyseerrUser} = useJellyseerr();
+	const seerrUserId = jellyseerrUser?.jellyseerrUserId;
+	const [seerrRows, setSeerrRows] = useState([]);
 	const unifiedMode = settings.unifiedLibraryMode && hasMultipleServers;
 	const isLegacy = typeof document !== 'undefined' && (' ' + document.documentElement.className + ' ').indexOf(' legacy ') >= 0;
 	const [state, dispatch] = useReducer(browseReducer, browseInitialState);
@@ -559,6 +569,8 @@ const Browse = ({
 			return title && title !== row.title ? {...row, title} : row;
 		});
 
+		result = [...result, ...seerrRows];
+
 		const resumeOrder = rowOrderMap.get('resume');
 		const nextUpOrder = rowOrderMap.get('nextup');
 		const continueOrder = Math.min(
@@ -573,6 +585,8 @@ const Browse = ({
 					order = Number.isFinite(continueOrder) ? continueOrder : 0;
 				} else if (row.isLatestRow) {
 					order = rowOrderMap.get('latest-media');
+				} else if (row.isSeerrRow) {
+					order = 3000 + index;
 				}
 				if (!Number.isFinite(order)) {
 					order = row.isPluginRow ? 2000 + index : 1000 + index;
@@ -602,7 +616,7 @@ const Browse = ({
 
 		prevFilteredRowsRef.current = result;
 		return result;
-	}, [allRowData, homeRowsConfig, pluginSectionsConfig, settings.mergeContinueWatchingNextUp, isRowVisibleByGates]);
+	}, [allRowData, seerrRows, homeRowsConfig, pluginSectionsConfig, settings.mergeContinueWatchingNextUp, isRowVisibleByGates]);
 
 	const focusRow = useCallback((rowIndex) => {
 		const row = filteredRowsRef.current[rowIndex];
@@ -1321,6 +1335,61 @@ const Browse = ({
 		});
 	}, [onSelectGenre, onBlurItemThemeMusic, onLeaveThemeMusic]);
 
+	const handleSelectSeerrItem = useCallback((item) => {
+		const raw = item._seerrRaw || {};
+		switch (item._seerrType) {
+			case 'genre':
+				onSelectSeerrGenre?.(raw.genreId, raw.genreName, raw.mediaType);
+				break;
+			case 'studio':
+				onSelectSeerrStudio?.(raw.studioId, raw.studioName);
+				break;
+			case 'network':
+				onSelectSeerrNetwork?.(raw.networkId, raw.networkName);
+				break;
+			default:
+				onSelectSeerrItem?.(raw);
+				break;
+		}
+	}, [onSelectSeerrItem, onSelectSeerrGenre, onSelectSeerrStudio, onSelectSeerrNetwork]);
+
+	useEffect(() => {
+		if (!jellyseerrEnabled || !jellyseerrAuthenticated) {
+			setSeerrRows([]);
+			return;
+		}
+		const enabledIds = (settings.seerrHomeRows || []).filter((r) => r.enabled).map((r) => r.id);
+		if (enabledIds.length === 0) {
+			setSeerrRows([]);
+			return;
+		}
+
+		let cancelled = false;
+		const configs = getSeerrHomeRowConfigs();
+
+		(async () => {
+			const built = await Promise.all(enabledIds.map(async (id) => {
+				const cfg = configs.find((c) => c.id === id);
+				if (!cfg) return null;
+				const items = await fetchSeerrHomeRow(id, {userId: seerrUserId});
+				if (!items.length) return null;
+				return {
+					id: `seerr-${id}`,
+					title: cfg.title,
+					items,
+					type: cfg.cardType,
+					isSeerrRow: true,
+					isTileRow: cfg.type === 'genre' || cfg.type === 'studio' || cfg.type === 'network'
+				};
+			}));
+			if (!cancelled) setSeerrRows(built.filter(Boolean));
+		})();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [jellyseerrEnabled, jellyseerrAuthenticated, seerrUserId, settings.seerrHomeRows]);
+
 	const handleNavigateDownFromFeatured = useCallback(() => {
 		dispatch({type: 'SET_BROWSE_MODE', mode: 'rows'});
 		setTimeout(() => {
@@ -1447,25 +1516,48 @@ const Browse = ({
 					ref={contentRowsRef}
 					className={`${css.contentRows} ${browseMode === 'rows' ? css.rowsMode : ''}`}
 				>
-					{filteredRows.map((row, index) => (
-						<RowComponent
-							key={row.id}
-							rowId={row.id}
-							title={row.title}
-							items={row.items}
-							serverUrl={serverUrl}
-							cardType={row.type}
-							onSelectItem={row.isGenreRow ? handleSelectGenreItem : handleSelectItem}
-							onFocus={handleRowFocus}
-							onFocusItem={handleFocusItem}
-							rowIndex={index}
-							onNavigateUp={handleNavigateUp}
-							onNavigateDown={handleNavigateDown}
-							showServerBadge={unifiedMode}
-							showOverview={settings.homeRowOverlay === 'on'}
-							registerRowRef={registerRowRef}
-						/>
-					))}
+					{filteredRows.map((row, index) => {
+						if (row.isTileRow) {
+							return (
+								<SeerrTileRow
+									key={row.id}
+									rowId={row.id}
+									title={row.title}
+									items={row.items}
+									cardType={row.type}
+									onSelectItem={handleSelectSeerrItem}
+									onFocus={handleRowFocus}
+									onFocusItem={handleFocusItem}
+									rowIndex={index}
+									onNavigateUp={handleNavigateUp}
+									onNavigateDown={handleNavigateDown}
+									registerRowRef={registerRowRef}
+								/>
+							);
+						}
+						let selectHandler = handleSelectItem;
+						if (row.isSeerrRow) selectHandler = handleSelectSeerrItem;
+						else if (row.isGenreRow) selectHandler = handleSelectGenreItem;
+						return (
+							<RowComponent
+								key={row.id}
+								rowId={row.id}
+								title={row.title}
+								items={row.items}
+								serverUrl={serverUrl}
+								cardType={row.type}
+								onSelectItem={selectHandler}
+								onFocus={handleRowFocus}
+								onFocusItem={handleFocusItem}
+								rowIndex={index}
+								onNavigateUp={handleNavigateUp}
+								onNavigateDown={handleNavigateDown}
+								showServerBadge={unifiedMode}
+								showOverview={settings.homeRowOverlay === 'on'}
+								registerRowRef={registerRowRef}
+							/>
+						);
+					})}
 					{filteredRows.length === 0 && (
 						<div className={css.empty}>{$L('No content found')}</div>
 					)}

@@ -17,6 +17,7 @@ import {isBackKey} from '../../utils/keys';
 import ClearDataDialog from '../../components/ClearDataDialog';
 import SpottableInput from '../../components/SpottableInput/SpottableInput';
 import {clearAllStorage} from '../../services/storage';
+import {getSeerrHomeRowConfigs} from '../../utils/seerrHomeRows';
 import {MATERIAL_ICON_PATHS} from './materialIconMap';
 
 import css from './Settings.module.less';
@@ -682,6 +683,8 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 				Spotlight.focus(selectedId ? `theme-card-${selectedId}` : 'themes-view');
 			} else if (cv.view === 'homeRows') {
 				Spotlight.focus('homerows-view');
+			} else if (cv.view === 'seerrHomeRows') {
+				Spotlight.focus('seerr-home-rows-view');
 			} else if (cv.view === 'libraries') {
 				Spotlight.focus('libraries-view');
 			} else if (cv.view === 'ratingSources') {
@@ -1028,6 +1031,18 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 
 		return [...mergedSections].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 	}, [settings.pluginSections, kefinProbeState.data, hssProbeState.data]);
+
+	const openSeerrHomeRows = useCallback(() => {
+		pushView({view: 'seerrHomeRows', returnFocusTo: 'setting-seerrHomeRows'});
+	}, [pushView]);
+
+	const toggleSeerrHomeRow = useCallback((rowId) => {
+		const current = Array.isArray(settings.seerrHomeRows) ? settings.seerrHomeRows : [];
+		const next = current.some((r) => r.id === rowId)
+			? current.map((r) => (r.id === rowId ? {...r, enabled: !r.enabled} : r))
+			: [...current, {id: rowId, enabled: true}];
+		updateSetting('seerrHomeRows', next);
+	}, [settings.seerrHomeRows, updateSetting]);
 
 	const openHomeRows = useCallback(() => {
 		setTempHomeRows([...(settings.homeRows || DEFAULT_HOME_ROWS)].sort((a, b) => a.order - b.order));
@@ -1461,12 +1476,16 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 			{renderToggleItem('showFavoritesButton', $L('Favorites Button'), $L('Show favorites button in navigation bar'), 'heart')}
 			{renderToggleItem('showLibrariesInToolbar', $L('Libraries Button'), $L('Show library shortcuts in navigation bar'), 'folder')}
 			{renderToggleItem('showSyncPlayButton', $L('SyncPlay Button'), $L('Show SyncPlay button in navigation bar'), 'check')}
+			{jellyseerr.isEnabled &&
+				renderToggleItem('showSeerrButton', `${seerrLabel} ${$L('Button')}`, $L('Show Seerr button in navigation bar'))}
 		</>
 	);
 
 	const renderPersonalizationHomePage = () => (
 		<>
 			{renderNavItem('homeRows', $L('Home Sections'), $L('Configure which rows appear on home screen'), openHomeRows, 'list')}
+			{jellyseerr.isEnabled &&
+				renderNavItem('seerrHomeRows', `${seerrLabel} ${$L('Rows')}`, $L('Choose which Seerr discover rows appear on home'), openSeerrHomeRows, 'list')}
 			{renderToggleItem(
 				'displayFavoritesRows',
 				$L('Display Favorites Rows'),
@@ -2225,6 +2244,35 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 		</ViewContainer>
 	);
 
+	const renderSeerrHomeRowsView = () => {
+		const enabledMap = new Map((settings.seerrHomeRows || []).map((r) => [r.id, r.enabled]));
+		return (
+			<ViewContainer className={css.viewContainer} spotlightId='seerr-home-rows-view'>
+				<div className={css.listContent} onFocus={handleListFocus}>
+					<div className={css.listInner}>
+						{renderSectionTitle(`${seerrLabel} ${$L('Home Rows')}`)}
+						<div className={css.viewDescription}>
+							{$L('Choose which Seerr discover rows appear on the home screen.')}
+						</div>
+						{getSeerrHomeRowConfigs().map((cfg) => (
+							<SpottableDiv
+								key={cfg.id}
+								className={css.listItem}
+								onClick={() => toggleSeerrHomeRow(cfg.id)}
+								spotlightId={`seerrrow-${cfg.id}`}
+							>
+								<div className={css.listItemBody}>
+									<div className={css.listItemHeading}>{cfg.title}</div>
+								</div>
+								<div className={css.listItemTrailing}>{renderToggle(enabledMap.get(cfg.id) === true)}</div>
+							</SpottableDiv>
+						))}
+					</div>
+				</div>
+			</ViewContainer>
+		);
+	};
+
 	const renderHomeRowsView = () => (
 		<ViewContainer className={css.viewContainer} spotlightId='homerows-view'>
 			<div className={css.listContent} onFocus={handleListFocus}>
@@ -2586,6 +2634,7 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 			{currentView.view === 'options' && renderOptionsView()}
 			{currentView.view === 'themes' && renderThemesView()}
 			{currentView.view === 'homeRows' && renderHomeRowsView()}
+			{currentView.view === 'seerrHomeRows' && renderSeerrHomeRowsView()}
 			{currentView.view === 'ratingSources' && renderRatingSourcesView()}
 			{currentView.view === 'excludedGenres' && renderExcludedGenresView()}
 			{currentView.view === 'pinCode' && renderPinCodeView()}
