@@ -624,7 +624,7 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 					enableDirectStream: !settings.preferTranscode,
 					forceDirectPlay: isLiveTV ? false : settings.forceDirectPlay,
 					mediaSourceId: initialMediaSourceId,
-					audioStreamIndex: initialAudioIndex,
+					audioStreamIndex: initialAudioIndex != null ? initialAudioIndex : undefined,
 					subtitleStreamIndex: initialSubtitleIndex,
 					item: item,
 					isLiveTV,
@@ -667,8 +667,13 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 					}
 				setChapters(chapterList);
 
+				// A local language override wins; otherwise honor the Jellyfin user's
+				// preferred audio language via the server-computed defaultAudioStreamIndex
+				// (#186), then the file's default track.
 				const defaultAudio = result.audioStreams?.find(s => s.isDefault);
 				const preferredAudio = findPreferredAudioStream(result.audioStreams, settings.audioLanguage);
+				const serverAudio = result.audioStreams?.find(s => s.index === result.defaultAudioStreamIndex);
+				const autoAudio = preferredAudio || serverAudio || defaultAudio;
 				if (initialAudioIndex !== undefined && initialAudioIndex !== null) {
 					setSelectedAudioIndex(initialAudioIndex);
 					// Store for onFirstTimeUpdate to apply via audioTracks API
@@ -676,15 +681,12 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 						streamIndex: initialAudioIndex,
 						audioStreams: result.audioStreams || []
 					};
-				} else if (preferredAudio) {
-					setSelectedAudioIndex(preferredAudio.index);
-					pendingAudioRef.current = {
-						streamIndex: preferredAudio.index,
-						audioStreams: result.audioStreams || []
-					};
-				} else if (defaultAudio) {
-					setSelectedAudioIndex(defaultAudio.index);
-					pendingAudioRef.current = null;
+				} else if (autoAudio) {
+					setSelectedAudioIndex(autoAudio.index);
+					// Only switch via the audioTracks API when it isn't the file's native default
+					pendingAudioRef.current = autoAudio.index !== defaultAudio?.index
+						? {streamIndex: autoAudio.index, audioStreams: result.audioStreams || []}
+						: null;
 				}
 
 				// Load subtitle data or renderer for the selected stream.
@@ -770,6 +772,15 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 					if (forcedSub) {
 						setSelectedSubtitleIndex(forcedSub.index);
 						await loadSubtitleData(forcedSub);
+					}
+				} else if (settings.subtitleMode === 'default' &&
+						result.defaultSubtitleStreamIndex != null && result.defaultSubtitleStreamIndex >= 0) {
+					// Honor the Jellyfin user's subtitle preference, computed server-side
+					// from their SubtitleMode + SubtitleLanguagePreference (#186).
+					const serverSub = result.subtitleStreams?.find(s => s.index === result.defaultSubtitleStreamIndex);
+					if (serverSub) {
+						setSelectedSubtitleIndex(serverSub.index);
+						await loadSubtitleData(serverSub);
 					}
 				}
 

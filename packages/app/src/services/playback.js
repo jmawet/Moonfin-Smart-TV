@@ -334,7 +334,8 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 	const maxBitrate = options.maxBitrate > 0 ? options.maxBitrate : getAutoMaxBitrate(capabilities);
 
 	const requestedStartTime = isLiveTV ? 0 : (options.startPositionTicks || 0);
-	const requestedSubtitleStreamIndex = options.subtitleStreamIndex != null ? options.subtitleStreamIndex : -1;
+	const hasExplicitSubtitle = options.subtitleStreamIndex != null;
+	const requestedSubtitleStreamIndex = hasExplicitSubtitle ? options.subtitleStreamIndex : -1;
 	// Image-based subtitles (PGS/DVD) are rendered client-side via libpgs. Never send
 	// their index to the server: during transcode it burns them into the video, which
 	// is far too slow for large/4K sources and times out behind a reverse proxy (#218).
@@ -348,6 +349,9 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 	const subtitleIsImageBased = !!requestedSubStream &&
 		IMAGE_SUBTITLE_CODECS.includes((requestedSubStream.Codec || '').toLowerCase());
 	const subtitleStreamIndex = subtitleIsImageBased ? -1 : requestedSubtitleStreamIndex;
+	// When the user hasn't explicitly picked a subtitle, omit the index entirely so
+	// the server applies their preferred-subtitle-language / SubtitleMode default.
+	const sentSubtitleStreamIndex = hasExplicitSubtitle ? subtitleStreamIndex : undefined;
 	if (subtitleIsImageBased) {
 		console.log('[playback] Image-based subtitle selected — negotiating without it to avoid server burn-in (#218)');
 	}
@@ -374,7 +378,7 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 		EnableDirectStream: options.enableDirectStream !== false,
 		EnableTranscoding: options.enableTranscoding !== false,
 		AudioStreamIndex: options.audioStreamIndex,
-		SubtitleStreamIndex: subtitleStreamIndex,
+		SubtitleStreamIndex: sentSubtitleStreamIndex,
 		MaxStreamingBitrate: maxBitrate,
 		MediaSourceId: options.mediaSourceId
 	});
@@ -493,7 +497,7 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 					EnableDirectStream: options.enableDirectStream !== false,
 					EnableTranscoding: options.enableTranscoding !== false,
 					AudioStreamIndex: altStream.Index,
-					SubtitleStreamIndex: subtitleStreamIndex,
+					SubtitleStreamIndex: sentSubtitleStreamIndex,
 					MaxStreamingBitrate: maxBitrate,
 					MediaSourceId: options.mediaSourceId || mediaSource.Id
 				});
@@ -513,7 +517,7 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 					EnableDirectStream: false,
 					EnableTranscoding: true,
 					AudioStreamIndex: mediaSource.DefaultAudioStreamIndex,
-					SubtitleStreamIndex: subtitleStreamIndex,
+					SubtitleStreamIndex: sentSubtitleStreamIndex,
 					MaxStreamingBitrate: maxBitrate,
 					MediaSourceId: options.mediaSourceId || mediaSource.Id
 				});
@@ -530,6 +534,37 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 	}
 
 	let playMethod = determinePlayMethod(mediaSource, capabilities, options, passthroughSettings);
+
+	// #186 + #218 safety: when we let the server pick the user's preferred subtitle
+	// (no explicit index) and it resolved to an image-based track on a transcode, the
+	// server would burn it into the video — the slow path #218 fixed. Re-negotiate
+	// without it and let the player render the image sub client-side from its .sup URL.
+	if (!hasExplicitSubtitle && playMethod === PlayMethod.Transcode &&
+			mediaSource.DefaultSubtitleStreamIndex != null && mediaSource.DefaultSubtitleStreamIndex >= 0) {
+		const resolvedSub = findSubtitleStreamByIndex(mediaSource.DefaultSubtitleStreamIndex, mediaSource.MediaStreams);
+		if (resolvedSub && IMAGE_SUBTITLE_CODECS.includes((resolvedSub.Codec || '').toLowerCase())) {
+			console.log('[playback] Server default subtitle is image-based on transcode — re-negotiating without burn-in (#218)');
+			const noBurnInfo = await api.getPlaybackInfo(itemId, {
+				DeviceProfile: deviceProfile,
+				StartTimeTicks: requestedStartTime,
+				AutoOpenLiveStream: true,
+				EnableDirectPlay: options.enableDirectPlay !== false,
+				EnableDirectStream: options.enableDirectStream !== false,
+				EnableTranscoding: options.enableTranscoding !== false,
+				AudioStreamIndex: audioStreamIndex,
+				SubtitleStreamIndex: -1,
+				MaxStreamingBitrate: maxBitrate,
+				MediaSourceId: options.mediaSourceId || mediaSource.Id
+			});
+			if (noBurnInfo.MediaSources?.length) {
+				mediaSource = noBurnInfo.MediaSources[0];
+				// Keep the resolved index so the player still renders it client-side.
+				mediaSource.DefaultSubtitleStreamIndex = resolvedSub.Index;
+				playbackInfo = noBurnInfo;
+				playMethod = determinePlayMethod(mediaSource, capabilities, options, passthroughSettings);
+			}
+		}
+	}
 
 	// Log video stream info including HDR type
 	const videoStream = mediaSource.MediaStreams?.find(s => s.Type === 'Video');
@@ -563,7 +598,7 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 			EnableDirectStream: false,
 			EnableTranscoding: true,
 			AudioStreamIndex: audioStreamIndex,
-			SubtitleStreamIndex: subtitleStreamIndex,
+			SubtitleStreamIndex: sentSubtitleStreamIndex,
 			MaxStreamingBitrate: maxBitrate,
 			MediaSourceId: options.mediaSourceId
 		});
