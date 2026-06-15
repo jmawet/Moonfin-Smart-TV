@@ -1435,7 +1435,7 @@ const Browse = ({
 
 	return (
 		<div className={css.page}>
-			<div className={`${css.mainContent} ${settings.navbarPosition === 'left' ? css.sidebarOffset : ''}`} ref={mainContentRef}>
+			<div className={`${css.mainContent} ${settings.navbarPosition === 'left' ? css.sidebarOffset : css.topbarOffset}`} ref={mainContentRef}>
 				<BackdropLayer
 					targetUrl={targetBackdropUrl}
 					blurAmount={settings.backdropBlurHome}
