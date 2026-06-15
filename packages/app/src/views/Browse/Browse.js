@@ -1313,6 +1313,7 @@ const Browse = ({
 		settings.genresRowItemFilter,
 		settings.uiLanguage,
 		settings.pluginSections,
+		settings.mergeContinueWatchingNextUp,
 		isCacheValid,
 		loadBrowseCache,
 		saveBrowseCache,
