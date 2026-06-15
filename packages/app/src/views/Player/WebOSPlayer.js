@@ -162,6 +162,7 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 	const pendingAudioRef = useRef(null);
 
 	const playbackStartTimeoutRef = useRef(null);
+	const playbackStartTimedOutRef = useRef(false);
 	const pendingResumeTicksRef = useRef(0);
 	const hasReportedStartRef = useRef(false);
 	const lastSeekTimeRef = useRef(0);
@@ -1006,11 +1007,12 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 					console.log('[Player] hls.js manifest parsed, levels:', data.levels?.length, 'waiting for first fragment...');
 				});
 
+				const fragStartThreshold = isLiveTV ? 1 : 2;
 				hls.on(Hls.Events.FRAG_BUFFERED, () => {
 					fragBufferedCount++;
 					if (hlsPlayStarted) return;
-					if (fragBufferedCount < 2) {
-						console.log('[Player] hls.js fragment buffered (' + fragBufferedCount + '/2), waiting for more data...');
+					if (fragBufferedCount < fragStartThreshold) {
+						console.log('[Player] hls.js fragment buffered (' + fragBufferedCount + '/' + fragStartThreshold + '), waiting for more data...');
 						return;
 					}
 					hlsPlayStarted = true;
@@ -1087,6 +1089,7 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 					resumeHandled = true;
 					clearTimeout(playbackStartTimeoutRef.current);
 					playbackStartTimeoutRef.current = null;
+					playbackStartTimedOutRef.current = false;
 					sourceTransitionRef.current = false;
 					transcodeRetryCountRef.current = 0;
 					if (pendingResumeTicksRef.current > 0) {
@@ -1136,6 +1139,7 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 				if (noProgress) {
 					console.warn('[Player] Playback start timeout - no timeupdate received in ' + (timeoutMs / 1000) + 's, triggering error handler');
 					console.warn('[Player] Video state:', { readyState: video.readyState, networkState: video.networkState, paused: video.paused, currentSrc: video.currentSrc });
+					playbackStartTimedOutRef.current = true;
 					video.dispatchEvent(new Event('error'));
 				}
 			}, timeoutMs);
@@ -1176,7 +1180,7 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 			}
 			destroyHlsPlayer();
 		};
-	}, [mediaUrl, isLoading, mimeType, playMethod, error, settings.videoStartDelay]);
+	}, [mediaUrl, isLoading, mimeType, playMethod, error, settings.videoStartDelay, isLiveTV]);
 
 	const showControls = useCallback((isModalOpen = activeModal) => {
 		setControlsVisible(true);
@@ -1444,10 +1448,12 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 	}, [onEnded, onPlayNext, nextEpisode, hasNextTrack, audioPlaylist, audioPlaylistIndex, shuffleMode, repeatMode]);
 
 	const handleError = useCallback(async () => {
-		if (isPaused || videoRef.current?.paused) {
+		const startFailure = playbackStartTimedOutRef.current && !isPaused;
+		if ((isPaused || videoRef.current?.paused) && !startFailure) {
 			console.log('[Player] Ignoring error while paused');
 			return;
 		}
+		playbackStartTimedOutRef.current = false;
 
 		// Ignore errors fired during cleanup (SDR reset video triggers error code 4)
 		if (isCleaningUpRef.current) {

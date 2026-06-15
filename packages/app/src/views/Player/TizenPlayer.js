@@ -766,15 +766,11 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 				}
 
 				if (isLiveTV || result.url.includes('.m3u8')) {
-					const maxRes = is4K ? '3840x2160' : '1920x1080';
-					const props = [
-						`FIXED_MAX_RESOLUTION=${maxRes}`,
-						'STARTBITRATE=HIGHEST',
-						'USER_AGENT=JellyfinTizenClient'
-					];
-					if (typeof effectiveBitrate !== 'undefined' && effectiveBitrate != null) {
-						props.push(`FIXED_MAX_BITRATE=${effectiveBitrate}`);
-					}
+					// ADAPTIVE_INFO only accepts BITRATES/STARTBITRATE/SKIPBITRATE/
+					// FIXED_MAX_RESOLUTION. The FIXED_MAX_BITRATE key #222 added is
+					// invalid and breaks transcoded HLS on 2020-era Tizen (#232).
+					const props = [`FIXED_MAX_RESOLUTION=${is4K ? '3840x2160' : '1920x1080'}`];
+					if (is4K) props.push('STARTBITRATE=HIGHEST');
 					avplaySetStreamingProperty('ADAPTIVE_INFO', props.join('|'));
 				}
 
