@@ -1522,7 +1522,7 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 			{renderToggleItem('mergeContinueWatchingNextUp', $L('Merge Continue Watching'), $L('Combine Continue Watching and Next Up'), 'arrowupdown')}
 			{renderOptionItem('homeRowsStyle', $L('Rows Type'), getHomeRowsStyleOptions(), $L('Modern'), 'appscontents')}
 			{renderOptionItem('homeRowsImageType', $L('Home Row Image Type'), getImageTypeOptions(), $L('Poster'), 'picture')}
-			{settings.homeRowsStyle === 'modern' && renderToggleItem(
+			{renderToggleItem(
 				'fullScreenRows',
 				$L('Expanded Home Rows'),
 				$L('Limit home rows to 1 row per screen'),

@@ -98,10 +98,16 @@ const MediaRow = ({
 
 	if (!items || items.length === 0) return null;
 
+	const rowClassName = [
+		css.row,
+		className || '',
+		settings.fullScreenRows === true ? css.fullScreenRows : ''
+	].filter(Boolean).join(' ');
+
 	return (
 		<RowContainer
 			ref={rowElementRef}
-			className={`${css.row}${className ? ` ${className}` : ''}`}
+			className={rowClassName}
 			spotlightId={`row-${rowIndex}`}
 			data-row-index={rowIndex}
 			onKeyDown={handleKeyDown}

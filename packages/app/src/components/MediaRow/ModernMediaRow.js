@@ -133,6 +133,7 @@ const ModernMediaRow = ({
 		className || '',
 		platform === 'webos' ? css.platformWebos : '',
 		platform === 'tizen' ? css.platformTizen : '',
+		settings.fullScreenRows === true ? css.fullScreenRows : '',
 		typeof document !== 'undefined' && document.documentElement.classList.contains('legacy') ? css.platformLegacy : ''
 	].filter(Boolean).join(' ');
 
