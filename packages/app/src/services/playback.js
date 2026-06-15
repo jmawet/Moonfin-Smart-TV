@@ -9,6 +9,19 @@ export const PlayMethod = {
 	Transcode: 'Transcode'
 };
 
+// Image-based subtitles are rendered client-side via libpgs, never by the server.
+const IMAGE_SUBTITLE_CODECS = ['pgssub', 'hdmv_pgs', 'pgs', 'dvdsub', 'dvbsub', 'dvb_subtitle'];
+
+const findSubtitleStreamByIndex = (index, ...streamSets) => {
+	if (index == null || index < 0) return null;
+	for (const streams of streamSets) {
+		if (!Array.isArray(streams)) continue;
+		const found = streams.find(s => s.Type === 'Subtitle' && s.Index === index);
+		if (found) return found;
+	}
+	return null;
+};
+
 // This is for the TranscodeKillr Plugin witch needs a Tag or else the audio remux only will be killed aftr 10 seconds
 const isAudioOnlyRemuxTranscode = (mediaSource) => {
 	if (!mediaSource?.TranscodingUrl) return false;
@@ -252,17 +265,22 @@ const extractAudioStreams = (mediaSource) => {
 		}));
 };
 
-const extractSubtitleStreams = (mediaSource) => {
+const extractSubtitleStreams = (mediaSource, itemId = null, creds = null) => {
 	if (!mediaSource.MediaStreams) return [];
-	const serverUrl = jellyfinApi.getServerUrl();
+	const serverUrl = creds?.serverUrl || jellyfinApi.getServerUrl();
+	const apiKey = creds?.accessToken || jellyfinApi.getApiKey();
 
 	return mediaSource.MediaStreams
 		.filter(s => s.Type === 'Subtitle')
 		.map(s => {
+			const codec = s.Codec?.toLowerCase();
+			const isImageBased = IMAGE_SUBTITLE_CODECS.includes(codec);
 			let deliveryUrl = null;
 			if (s.DeliveryUrl) {
 				// External URLs are used as-is, internal URLs need server prefix
 				deliveryUrl = s.IsExternalUrl ? s.DeliveryUrl : `${serverUrl}${s.DeliveryUrl}`;
+			} else if (isImageBased && itemId && !s.IsExternal) {
+				deliveryUrl = `${serverUrl}/Videos/${itemId}/${mediaSource.Id}/Subtitles/${s.Index}/0/Stream.sup?api_key=${apiKey}`;
 			}
 			return {
 				index: s.Index,
@@ -272,9 +290,9 @@ const extractSubtitleStreams = (mediaSource) => {
 				isExternal: s.IsExternal,
 				isForced: s.IsForced,
 				isDefault: s.IsDefault,
-				isTextBased: ['srt', 'subrip', 'vtt', 'webvtt', 'ass', 'ssa', 'sub', 'smi', 'sami'].includes(s.Codec?.toLowerCase()),
-				isAss: ['ass', 'ssa'].includes(s.Codec?.toLowerCase()),
-				isImageBased: ['pgssub', 'hdmv_pgs', 'pgs', 'dvdsub', 'dvbsub', 'dvb_subtitle'].includes(s.Codec?.toLowerCase()),
+				isTextBased: ['srt', 'subrip', 'vtt', 'webvtt', 'ass', 'ssa', 'sub', 'smi', 'sami'].includes(codec),
+				isAss: ['ass', 'ssa'].includes(codec),
+				isImageBased,
 				deliveryUrl: deliveryUrl,
 				deliveryMethod: s.DeliveryMethod
 			};
@@ -316,7 +334,23 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 	const maxBitrate = options.maxBitrate > 0 ? options.maxBitrate : getAutoMaxBitrate(capabilities);
 
 	const requestedStartTime = isLiveTV ? 0 : (options.startPositionTicks || 0);
-	const subtitleStreamIndex = options.subtitleStreamIndex != null ? options.subtitleStreamIndex : -1;
+	const requestedSubtitleStreamIndex = options.subtitleStreamIndex != null ? options.subtitleStreamIndex : -1;
+	// Image-based subtitles (PGS/DVD) are rendered client-side via libpgs. Never send
+	// their index to the server: during transcode it burns them into the video, which
+	// is far too slow for large/4K sources and times out behind a reverse proxy (#218).
+	// We still track the real index in the session so the player renders it client-side.
+	const requestedSubStream = findSubtitleStreamByIndex(
+		requestedSubtitleStreamIndex,
+		options.mediaSource?.MediaStreams,
+		options.item?.MediaStreams,
+		currentSession?.mediaSource?.MediaStreams
+	);
+	const subtitleIsImageBased = !!requestedSubStream &&
+		IMAGE_SUBTITLE_CODECS.includes((requestedSubStream.Codec || '').toLowerCase());
+	const subtitleStreamIndex = subtitleIsImageBased ? -1 : requestedSubtitleStreamIndex;
+	if (subtitleIsImageBased) {
+		console.log('[playback] Image-based subtitle selected — negotiating without it to avoid server burn-in (#218)');
+	}
 	console.log('[playback] getPlaybackInfo called:', {
 		itemId,
 		isLiveTV,
@@ -370,7 +404,7 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 			: (mediaSource.SupportsDirectPlay ? PlayMethod.DirectPlay : PlayMethod.DirectStream);
 		const url = buildPlaybackUrl(itemId, mediaSource, playbackInfo.PlaySessionId, playMethod, creds, false, options);
 		const audioStreams = extractAudioStreams(mediaSource);
-		const subtitleStreams = extractSubtitleStreams(mediaSource);
+		const subtitleStreams = extractSubtitleStreams(mediaSource, itemId, creds);
 
 		currentSession = {
 			itemId,
@@ -382,7 +416,7 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 			startPositionTicks: 0,
 			capabilities,
 			audioStreamIndex: mediaSource.DefaultAudioStreamIndex,
-			subtitleStreamIndex,
+			subtitleStreamIndex: requestedSubtitleStreamIndex,
 			maxBitrate: options.maxBitrate,
 			serverCredentials: creds
 		};
@@ -516,7 +550,7 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 	const url = buildPlaybackUrl(itemId, mediaSource, playbackInfo.PlaySessionId, playMethod, creds, isAudio, options);
 
 	const audioStreams = extractAudioStreams(mediaSource);
-	const subtitleStreams = extractSubtitleStreams(mediaSource);
+	const subtitleStreams = extractSubtitleStreams(mediaSource, itemId, creds);
 	const chapters = extractChapters(mediaSource);
 
 	const audioOnlyRemux = playMethod === PlayMethod.Transcode && isAudioOnlyRemuxTranscode(mediaSource);
@@ -533,7 +567,7 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 		startPositionTicks: options.startPositionTicks || 0,
 		capabilities,
 		audioStreamIndex: audioStreamIndex ?? mediaSource.DefaultAudioStreamIndex,
-		subtitleStreamIndex: subtitleStreamIndex,
+		subtitleStreamIndex: requestedSubtitleStreamIndex,
 		maxBitrate: options.maxBitrate,
 		serverCredentials: creds
 	};
