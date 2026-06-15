@@ -469,27 +469,62 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 		const defaultPlayable = isAudioStreamPlayable(defaultAudioStream, capabilities, passthroughSettings);
 
 		if (defaultAudioStream && !defaultPlayable) {
-			// Force Transcode if audio stream is unplayable
-			console.log(`[playback] Default audio (${defaultCodec}) unplayable \u2014 forcing transcode (audio-only remux, video copied)`);
-			const retryInfo = await api.getPlaybackInfo(itemId, {
-				DeviceProfile: deviceProfile,
-				StartTimeTicks: requestedStartTime,
-				AutoOpenLiveStream: true,
-				EnableDirectPlay: false,
-				EnableDirectStream: false,
-				EnableTranscoding: true,
-				AudioStreamIndex: mediaSource.DefaultAudioStreamIndex,
-				SubtitleStreamIndex: subtitleStreamIndex,
-				MaxStreamingBitrate: maxBitrate,
-				MediaSourceId: options.mediaSourceId || mediaSource.Id
-			});
-			if (retryInfo.MediaSources?.length) {
-				mediaSource = retryInfo.MediaSources[0];
-				audioStreamIndex = mediaSource.DefaultAudioStreamIndex;
-				playbackInfo = retryInfo;
-				mediaSource.SupportsDirectPlay = false;
-				mediaSource.SupportsDirectStream = false;
-				console.log(`[playback] After audio-remux retry \u2014 TranscodingUrl: ${mediaSource.TranscodingUrl ? 'present' : 'MISSING'}`);
+			// The default audio can't be played, but the file may carry a compatible
+			// alternate in the SAME language (e.g. TrueHD default + E-AC3 secondary).
+			// Prefer that so the server keeps direct-playing the video instead of
+			// transcoding, which just hangs on Dolby Vision files on webOS (#191).
+			// Restrict to the default's language (never switch to a foreign track)
+			// and pick the highest channel count (the main mix, not a commentary or
+			// descriptive downmix). With no same-language match we transcode as before.
+			const defaultLang = defaultAudioStream.Language;
+			const altStream = (mediaSource.MediaStreams || [])
+				.filter(s => s.Type === 'Audio' && s.Index !== defaultAudioStream.Index &&
+					(!defaultLang || s.Language === defaultLang) &&
+					isAudioStreamPlayable(s, capabilities, passthroughSettings))
+				.sort((a, b) => (b.Channels || 0) - (a.Channels || 0))[0] || null;
+
+			if (altStream) {
+				console.log(`[playback] Default audio (${defaultCodec}) unplayable \u2014 selecting compatible track ${altStream.Index} (${altStream.Codec}) to keep direct play`);
+				const altInfo = await api.getPlaybackInfo(itemId, {
+					DeviceProfile: deviceProfile,
+					StartTimeTicks: requestedStartTime,
+					AutoOpenLiveStream: true,
+					EnableDirectPlay: options.enableDirectPlay !== false,
+					EnableDirectStream: options.enableDirectStream !== false,
+					EnableTranscoding: options.enableTranscoding !== false,
+					AudioStreamIndex: altStream.Index,
+					SubtitleStreamIndex: subtitleStreamIndex,
+					MaxStreamingBitrate: maxBitrate,
+					MediaSourceId: options.mediaSourceId || mediaSource.Id
+				});
+				if (altInfo.MediaSources?.length) {
+					mediaSource = altInfo.MediaSources[0];
+					audioStreamIndex = altStream.Index;
+					playbackInfo = altInfo;
+				}
+			} else {
+				// No compatible alternate track \u2014 force an audio-only remux transcode.
+				console.log(`[playback] Default audio (${defaultCodec}) unplayable \u2014 forcing transcode (audio-only remux, video copied)`);
+				const retryInfo = await api.getPlaybackInfo(itemId, {
+					DeviceProfile: deviceProfile,
+					StartTimeTicks: requestedStartTime,
+					AutoOpenLiveStream: true,
+					EnableDirectPlay: false,
+					EnableDirectStream: false,
+					EnableTranscoding: true,
+					AudioStreamIndex: mediaSource.DefaultAudioStreamIndex,
+					SubtitleStreamIndex: subtitleStreamIndex,
+					MaxStreamingBitrate: maxBitrate,
+					MediaSourceId: options.mediaSourceId || mediaSource.Id
+				});
+				if (retryInfo.MediaSources?.length) {
+					mediaSource = retryInfo.MediaSources[0];
+					audioStreamIndex = mediaSource.DefaultAudioStreamIndex;
+					playbackInfo = retryInfo;
+					mediaSource.SupportsDirectPlay = false;
+					mediaSource.SupportsDirectStream = false;
+					console.log(`[playback] After audio-remux retry \u2014 TranscodingUrl: ${mediaSource.TranscodingUrl ? 'present' : 'MISSING'}`);
+				}
 			}
 		}
 	}
