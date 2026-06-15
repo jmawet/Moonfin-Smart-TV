@@ -43,6 +43,7 @@ const FeaturedBanner = memo(({
 	const [currentIndex, setCurrentIndex] = useState(0);
 	const [trailerActive, setTrailerActive] = useState(false);
 	const [featuredFocused, setFeaturedFocused] = useState(false);
+	const [screensaverActive, setScreensaverActive] = useState(false);
 
 	const preloadedImagesRef = useRef(new Set());
 	const trailerContainerRef = useRef(null);
@@ -312,7 +313,7 @@ const FeaturedBanner = memo(({
 	}, [stopTrailer, settings.featuredTrailerMuted]);
 
 	useEffect(() => {
-		if (!settings.featuredTrailerPreview || !isVisible || !currentFeatured) {
+		if (!settings.featuredTrailerPreview || !isVisible || !currentFeatured || screensaverActive) {
 			stopTrailer();
 			return;
 		}
@@ -369,7 +370,13 @@ const FeaturedBanner = memo(({
 			cancelled = true;
 			stopTrailer();
 		};
-	}, [currentIndex, currentFeatured, isVisible, settings.featuredTrailerPreview, getLocalTrailerStreamUrlForItem, getRemoteTrailersForItem, startTrailerPreview, stopTrailer]);
+	}, [currentIndex, currentFeatured, isVisible, screensaverActive, settings.featuredTrailerPreview, getLocalTrailerStreamUrlForItem, getRemoteTrailersForItem, startTrailerPreview, stopTrailer]);
+
+	useEffect(() => {
+		const handleScreensaver = (e) => setScreensaverActive(!!e.detail?.active);
+		window.addEventListener('moonfin:screensaver', handleScreensaver);
+		return () => window.removeEventListener('moonfin:screensaver', handleScreensaver);
+	}, []);
 
 	useEffect(() => {
 		const handleVisibility = () => {

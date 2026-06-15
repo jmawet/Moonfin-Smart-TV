@@ -169,6 +169,10 @@ const AppContent = (props) => {
 	const {isInactive: showScreensaver, dismiss: dismissScreensaver} = useInactivityTimer(screensaverTimeout, screensaverEnabled);
 
 	useEffect(() => {
+		window.dispatchEvent(new CustomEvent('moonfin:screensaver', {detail: {active: showScreensaver}}));
+	}, [showScreensaver]);
+
+	useEffect(() => {
 		if (!isAuthenticated) {
 			setIsPinUnlocked(false);
 			setPinCodeInput('');

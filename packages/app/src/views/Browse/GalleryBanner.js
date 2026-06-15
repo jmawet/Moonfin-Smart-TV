@@ -47,6 +47,7 @@ const GalleryBanner = memo(({
 	const [featuredFocused, setFeaturedFocused] = useState(false);
 	const [activeDetail, setActiveDetail] = useState(null);
 	const [trailerActive, setTrailerActive] = useState(false);
+	const [screensaverActive, setScreensaverActive] = useState(false);
 
 	const carouselIntervalRef = useRef(null);
 	const detailCacheRef = useRef({});
@@ -303,7 +304,7 @@ const GalleryBanner = memo(({
 	}, [stopTrailer, settings.featuredTrailerMuted]);
 
 	useEffect(() => {
-		if (!settings.featuredTrailerPreview || !isVisible || !currentFeatured) {
+		if (!settings.featuredTrailerPreview || !isVisible || !currentFeatured || screensaverActive) {
 			stopTrailer();
 			return;
 		}
@@ -360,7 +361,13 @@ const GalleryBanner = memo(({
 			cancelled = true;
 			stopTrailer();
 		};
-	}, [currentFeatured, isVisible, settings.featuredTrailerPreview, getLocalTrailerStreamUrlForItem, getRemoteTrailersForItem, startTrailerPreview, stopTrailer]);
+	}, [currentFeatured, isVisible, screensaverActive, settings.featuredTrailerPreview, getLocalTrailerStreamUrlForItem, getRemoteTrailersForItem, startTrailerPreview, stopTrailer]);
+
+	useEffect(() => {
+		const handleScreensaver = (e) => setScreensaverActive(!!e.detail?.active);
+		window.addEventListener('moonfin:screensaver', handleScreensaver);
+		return () => window.removeEventListener('moonfin:screensaver', handleScreensaver);
+	}, []);
 
 	useEffect(() => {
 		const handleVisibility = () => {
