@@ -429,6 +429,17 @@ const getNextUpBehaviorOptions = () => [
 	{ value: 'disabled', label: $L('Disabled') }
 ];
 
+const getUiLanguageOptions = () => [
+	{ value: 'en-US', label: $L('English') },
+	{ value: 'de', label: $L('German') },
+	{ value: 'es', label: $L('Spanish') },
+	{ value: 'fr', label: $L('French') },
+	{ value: 'hu', label: $L('Hungarian') },
+	{ value: 'pl', label: $L('Polish') },
+	{ value: 'pt-BR', label: $L('Portuguese (Brazil)') },
+	{ value: 'ru', label: $L('Russian') }
+];
+
 const getNextUpCountdownStyleOptions = () => [
 	{ value: 'progressBar', label: $L('Progress Bar') },
 	{ value: 'timer', label: $L('Timer') },
@@ -633,6 +644,13 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 	const { capabilities } = useDeviceInfo();
 	const jellyseerr = useJellyseerr();
 	const isSeerr = jellyseerr.isMoonfin && jellyseerr.variant === 'seerr';
+	const bootLocaleRef = useRef(settings.uiLanguage);
+	useEffect(() => {
+		if (settings.uiLanguage !== bootLocaleRef.current &&
+			typeof window !== 'undefined' && window.location) {
+			window.location.reload();
+		}
+	}, [settings.uiLanguage]);
 	const seerrLabel = isSeerr ? jellyseerr.displayName || $L('Seerr') : $L('Jellyseerr');
 	const categories = getBaseCategories();
 
@@ -1469,6 +1487,7 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 
 	const renderPersonalizationGeneralStyle = () => (
 		<>
+			{renderOptionItem('uiLanguage', $L('App Language'), getUiLanguageOptions(), $L('English'), 'language')}
 			{renderNavItem(
 				'themeSelection',
 				$L('Theme'),
