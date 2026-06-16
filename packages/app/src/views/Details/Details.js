@@ -218,174 +218,132 @@ const Details = ({itemId, initialItem, onPlay, onSelectItem, onSelectPerson, onI
 			setPlaylistItems([]);
 			setShowMediaInfo(false);
 
+			let data;
 			try {
-				const data = await effectiveApi.getItemForDetail(itemId);
-				setItem(tagWithServerInfo(data));
+				data = await effectiveApi.getItemForDetail(itemId);
+			} catch (err) {
+				console.error('[Details] Error loading item', err);
+				setIsLoading(false);
+				return;
+			}
 
-				setSelectedVersionIndex(0);
-				const ms = data.MediaSources?.[0];
-				if (ms) {
-					const initAudioStreams = ms.MediaStreams?.filter(s => s.Type === 'Audio') || [];
-					const initSubtitleStreams = ms.MediaStreams?.filter(s => s.Type === 'Subtitle') || [];
-
-					if (ms.DefaultAudioStreamIndex != null) {
-						const idx = initAudioStreams.findIndex(s => s.Index === ms.DefaultAudioStreamIndex);
-						if (idx >= 0) setSelectedAudioIndex(idx);
-					}
-
-					if (ms.DefaultSubtitleStreamIndex != null) {
-						const idx = initSubtitleStreams.findIndex(s => s.Index === ms.DefaultSubtitleStreamIndex);
-						if (idx >= 0) setSelectedSubtitleIndex(idx);
-					} else {
-						setSelectedSubtitleIndex(-1);
-					}
+			setItem(tagWithServerInfo(data));
+			setSelectedVersionIndex(0);
+			const ms = data.MediaSources?.[0];
+			if (ms) {
+				const initAudioStreams = ms.MediaStreams?.filter(s => s.Type === 'Audio') || [];
+				const initSubtitleStreams = ms.MediaStreams?.filter(s => s.Type === 'Subtitle') || [];
+				if (ms.DefaultAudioStreamIndex != null) {
+					const idx = initAudioStreams.findIndex(s => s.Index === ms.DefaultAudioStreamIndex);
+					if (idx >= 0) setSelectedAudioIndex(idx);
+				}
+				if (ms.DefaultSubtitleStreamIndex != null) {
+					const idx = initSubtitleStreams.findIndex(s => s.Index === ms.DefaultSubtitleStreamIndex);
+					if (idx >= 0) setSelectedSubtitleIndex(idx);
 				} else {
-					setSelectedAudioIndex(0);
 					setSelectedSubtitleIndex(-1);
 				}
+			} else {
+				setSelectedAudioIndex(0);
+				setSelectedSubtitleIndex(-1);
+			}
+			if (data.People?.length > 0) {
+				setCast(data.People.slice(0, 20));
+			}
 
-				if (data.People?.length > 0) {
-					setCast(data.People.slice(0, 20));
-				}
+			// Render with primary item immediately; load secondary data in background
+			setIsLoading(false);
 
+			const bg = async () => {
 				if (data.Type === 'Series') {
-					const seasonsData = await effectiveApi.getSeasons(itemId);
-					setSeasons(tagWithServerInfo(seasonsData.Items || []));
-
-					try {
-						const nextUpData = await effectiveApi.getNextUp(1, itemId);
-						if (nextUpData.Items?.length > 0) {
-							setNextUp(tagWithServerInfo(nextUpData.Items));
-						}
-					} catch { /* Next up not available */ }
+					const [seasonsData, nextUpData] = await Promise.all([
+						effectiveApi.getSeasons(itemId).catch(() => null),
+						effectiveApi.getNextUp(1, itemId).catch(() => null)
+					]);
+					if (seasonsData) setSeasons(tagWithServerInfo(seasonsData.Items || []));
+					if (nextUpData?.Items?.length > 0) setNextUp(tagWithServerInfo(nextUpData.Items));
 				}
 
 				if (data.Type === 'Season') {
-					try {
-						const episodesData = await effectiveApi.getEpisodes(data.SeriesId, data.Id);
-						setEpisodes(tagWithServerInfo(episodesData.Items || []));
-					} catch { /* Episodes not available */ }
+					const episodesData = await effectiveApi.getEpisodes(data.SeriesId, data.Id).catch(() => null);
+					if (episodesData) setEpisodes(tagWithServerInfo(episodesData.Items || []));
 				}
 
 				if (data.Type === 'Episode') {
 					const seasonId = data.SeasonId || data.ParentId;
 					if (data.SeriesId && seasonId) {
-						try {
-							const episodesData = await effectiveApi.getEpisodes(data.SeriesId, seasonId);
-							setEpisodes(tagWithServerInfo(episodesData.Items || []));
-						} catch { /* Same-season episodes not available */ }
+						const episodesData = await effectiveApi.getEpisodes(data.SeriesId, seasonId).catch(() => null);
+						if (episodesData) setEpisodes(tagWithServerInfo(episodesData.Items || []));
 					}
 				}
 
 				if (data.Type === 'BoxSet') {
-					try {
-						const collectionData = await effectiveApi.getItems({
-							ParentId: data.Id,
-							SortBy: 'ProductionYear,SortName',
-							SortOrder: 'Ascending',
-							Fields: 'PrimaryImageAspectRatio,ProductionYear'
-						});
-						setCollectionItems(tagWithServerInfo(collectionData.Items || []));
-					} catch { /* Collection items not available */ }
+					const collectionData = await effectiveApi.getItems({
+						ParentId: data.Id,
+						SortBy: 'ProductionYear,SortName',
+						SortOrder: 'Ascending',
+						Fields: 'PrimaryImageAspectRatio,ProductionYear'
+					}).catch(() => null);
+					if (collectionData) setCollectionItems(tagWithServerInfo(collectionData.Items || []));
 				}
 
 				if (data.Type === 'MusicAlbum') {
-					try {
-						const tracksData = await effectiveApi.getAlbumTracks(data.Id);
-						setAlbumTracks(tagWithServerInfo(tracksData.Items || []));
-					} catch { /* Album tracks not available */ }
-					try {
-						const similarData = await effectiveApi.getSimilar(itemId);
-						setSimilar(tagWithServerInfo(similarData.Items || []));
-					} catch { /* Similar albums not available */ }
+					const [tracksData, albumSimilarData] = await Promise.all([
+						effectiveApi.getAlbumTracks(data.Id).catch(() => null),
+						effectiveApi.getSimilar(itemId).catch(() => null)
+					]);
+					if (tracksData) setAlbumTracks(tagWithServerInfo(tracksData.Items || []));
+					if (albumSimilarData) setSimilar(tagWithServerInfo(albumSimilarData.Items || []));
 				}
 
 				if (data.Type === 'MusicArtist') {
-					try {
-						const albumsData = await effectiveApi.getAlbumsByArtist(data.Id);
-						setArtistAlbums(tagWithServerInfo(albumsData.Items || []));
-					} catch { /* Artist albums not available */ }
-					try {
-						const similarData = await effectiveApi.getSimilar(itemId);
-						setSimilar(tagWithServerInfo(similarData.Items || []));
-					} catch { /* Similar artists not available */ }
+					const [albumsData, artistSimilarData] = await Promise.all([
+						effectiveApi.getAlbumsByArtist(data.Id).catch(() => null),
+						effectiveApi.getSimilar(itemId).catch(() => null)
+					]);
+					if (albumsData) setArtistAlbums(tagWithServerInfo(albumsData.Items || []));
+					if (artistSimilarData) setSimilar(tagWithServerInfo(artistSimilarData.Items || []));
 				}
 
 				if (data.Type === 'Playlist') {
-					try {
-						const playlistData = await effectiveApi.getPlaylistItems(data.Id);
-						setPlaylistItems(tagWithServerInfo(playlistData?.Items || []));
-					} catch { /* Playlist items not available */ }
+					const playlistData = await effectiveApi.getPlaylistItems(data.Id).catch(() => null);
+					if (playlistData) setPlaylistItems(tagWithServerInfo(playlistData.Items || []));
 				}
 
-				if (data.Type !== 'Person' && data.Type !== 'BoxSet' && data.Type !== 'MusicAlbum' && data.Type !== 'MusicArtist' && data.Type !== 'Playlist') {
-					try {
-						const similarData = await effectiveApi.getSimilar(itemId);
-						setSimilar(tagWithServerInfo(similarData.Items || []));
-					} catch { /* Similar items not available */ }
-				}
+				const needsSimilar = data.Type !== 'Person' && data.Type !== 'BoxSet' &&
+					data.Type !== 'MusicAlbum' && data.Type !== 'MusicArtist' && data.Type !== 'Playlist';
+				const needsExtras = data.Type === 'Movie' || data.Type === 'Episode' || data.Type === 'Video';
+				const needsBoxSet = data.Type === 'Movie' || data.Type === 'Video';
 
-				if (data.Type === 'Movie' || data.Type === 'Episode' || data.Type === 'Video') {
-					try {
-						const extrasData = await effectiveApi.getSpecialFeatures(itemId);
-						const filtered = (extrasData || []).filter(e => e.Id !== itemId);
-						setExtras(tagWithServerInfo(filtered));
-					} catch { /* Extras not available */ }
-				}
+				const [similarData, extrasData, ancestorsData] = await Promise.all([
+					needsSimilar ? effectiveApi.getSimilar(itemId).catch(() => null) : Promise.resolve(null),
+					needsExtras ? effectiveApi.getSpecialFeatures(itemId).catch(() => null) : Promise.resolve(null),
+					needsBoxSet ? effectiveApi.getAncestors(itemId).catch(() => null) : Promise.resolve(null)
+				]);
 
-				if (data.Type === 'Movie' || data.Type === 'Video') {
-					try {
-						let boxSet = null;
-
-						const ancestors = await effectiveApi.getAncestors(itemId);
-						boxSet = (ancestors || []).find(a => a.Type === 'BoxSet') || null;
-
-						if (!boxSet) {
-							const boxSets = await effectiveApi.getItems({
-								IncludeItemTypes: 'BoxSet',
-								Recursive: true,
-								Limit: 200,
-								SortBy: 'SortName',
-								Fields: 'BasicSyncInfo'
-							});
-							const allBoxSets = boxSets.Items || [];
-							for (let i = 0; i < allBoxSets.length && !boxSet; i += 5) {
-								const batch = allBoxSets.slice(i, i + 5);
-								const results = await Promise.all(batch.map(async (bs) => {
-									const children = await effectiveApi.getItems({
-										ParentId: bs.Id,
-										Fields: 'BasicSyncInfo'
-									});
-									return (children.Items || []).some(c => c.Id === itemId) ? bs : null;
-								}));
-								boxSet = results.find(r => r != null) || null;
-							}
-						}
-
-						if (boxSet) {
-							setParentCollectionName(boxSet.Name || $L('Collection'));
-							const colData = await effectiveApi.getItems({
-								ParentId: boxSet.Id,
-								SortBy: 'PremiereDate,SortName',
-								SortOrder: 'Ascending',
-								Fields: 'PrimaryImageAspectRatio,ProductionYear'
-							});
-							setParentCollection(tagWithServerInfo(colData.Items || []));
-						}
-					} catch { /* ignore */ }
+				if (similarData) setSimilar(tagWithServerInfo(similarData.Items || []));
+				if (extrasData) setExtras(tagWithServerInfo(extrasData.filter(e => e.Id !== itemId)));
+				if (ancestorsData) {
+					const boxSet = ancestorsData.find(a => a.Type === 'BoxSet') || null;
+					if (boxSet) {
+						setParentCollectionName(boxSet.Name || $L('Collection'));
+						const colData = await effectiveApi.getItems({
+							ParentId: boxSet.Id,
+							SortBy: 'PremiereDate,SortName',
+							SortOrder: 'Ascending',
+							Fields: 'PrimaryImageAspectRatio,ProductionYear'
+						}).catch(() => null);
+						if (colData) setParentCollection(tagWithServerInfo(colData.Items || []));
+					}
 				}
 
 				if (data.Type === 'Person') {
-					try {
-						const filmography = await effectiveApi.getItemsByPerson(itemId, 50);
-						setSimilar(tagWithServerInfo(filmography.Items || []));
-					} catch { /* Filmography not available */ }
+					const filmography = await effectiveApi.getItemsByPerson(itemId, 50).catch(() => null);
+					if (filmography) setSimilar(tagWithServerInfo(filmography.Items || []));
 				}
-			} catch (err) {
-				console.error('[Details] Error loading item', err);
-			} finally {
-				setIsLoading(false);
-			}
+			};
+
+			bg().catch(() => {});
 		};
 		loadItem();
 	}, [effectiveApi, itemId, tagWithServerInfo]);
