@@ -284,6 +284,8 @@ const Browse = ({
 	const scrollTimeoutRef = useRef(null);
 	const contentRowsRef = useRef(null);
 
+	const showFeaturedBar = (settings.featuredBarStyle !== 'off');
+
 	const registerRowRef = useCallback((rowIndex, element) => {
 		if (element) {
 			rowRefsMap.current.set(rowIndex, element);
@@ -699,7 +701,7 @@ const Browse = ({
 
 	const handleNavigateUp = useCallback((fromRowIndex) => {
 		if (fromRowIndex === 0) {
-			if (settings.showFeaturedBar !== false) {
+			if (showFeaturedBar !== false) {
 				dispatch({type: 'SET_BROWSE_MODE', mode: 'featured'});
 				setTimeout(() => Spotlight.focus('featured-banner'), 50);
 			} else if (settings.navbarPosition !== 'left') {
@@ -709,7 +711,7 @@ const Browse = ({
 		}
 		const targetIndex = fromRowIndex - 1;
 		scrollToRow(targetIndex, true);
-	}, [settings.showFeaturedBar, settings.navbarPosition, scrollToRow]);
+	}, [showFeaturedBar, settings.navbarPosition, scrollToRow]);
 
 	filteredRowsRef.current = filteredRows;
 	filteredRowsLengthRef.current = filteredRows.length;
@@ -721,10 +723,10 @@ const Browse = ({
 	}, [scrollToRow]);
 
 	useEffect(() => {
-		if (settings.showFeaturedBar === false) {
+		if (showFeaturedBar === false) {
 			dispatch({type: 'SET_BROWSE_MODE', mode: 'rows'});
 		}
-	}, [settings.showFeaturedBar]);
+	}, [showFeaturedBar]);
 
 	useEffect(() => {
 		if (isVisible && !wasVisibleRef.current && !isLoading && filteredRows.length > 0) {
@@ -736,7 +738,7 @@ const Browse = ({
 					const {rowIndex} = lastFocusState;
 					const targetRowIndex = Math.min(rowIndex, filteredRows.length - 1);
 					scrollToRow(targetRowIndex, true);
-				} else if (settings.showFeaturedBar !== false && featuredItems.length > 0) {
+				} else if (showFeaturedBar !== false && featuredItems.length > 0) {
 					dispatch({type: 'SET_BROWSE_MODE', mode: 'featured'});
 					setTimeout(() => Spotlight.focus('featured-banner'), 50);
 				} else {
@@ -746,7 +748,7 @@ const Browse = ({
 			}, FOCUS_DELAY_MS);
 		}
 		wasVisibleRef.current = isVisible;
-	}, [isVisible, isLoading, filteredRows.length, fetchFreshFeaturedItems, refreshVolatileData, settings.showFeaturedBar, featuredItems.length, scrollToRow]);
+	}, [isVisible, isLoading, filteredRows.length, fetchFreshFeaturedItems, refreshVolatileData, showFeaturedBar, featuredItems.length, scrollToRow]);
 
 	useEffect(() => {
 		if (!isVisible) return;
@@ -755,7 +757,7 @@ const Browse = ({
 				if (lastFocusState || initialFocusSetRef.current) {
 					return;
 				}
-				if (settings.showFeaturedBar !== false && featuredItems.length > 0) {
+				if (showFeaturedBar !== false && featuredItems.length > 0) {
 					Spotlight.focus('featured-banner');
 					initialFocusSetRef.current = true;
 				} else if (filteredRows.length > 0) {
@@ -764,7 +766,7 @@ const Browse = ({
 				}
 			}, FOCUS_DELAY_MS);
 		}
-	}, [isVisible, isLoading, featuredItems.length, filteredRows.length, settings.showFeaturedBar]);
+	}, [isVisible, isLoading, featuredItems.length, filteredRows.length, showFeaturedBar]);
 
 	useEffect(() => {
 		cachedRowData = null;
@@ -1519,7 +1521,7 @@ const Browse = ({
 					blurAmount={settings.backdropBlurHome}
 				/>
 
-				{featuredItems.length > 0 && settings.showFeaturedBar !== false && (
+				{featuredItems.length > 0 && showFeaturedBar !== false && (
 					settings.featuredBarStyle === 'gallery' ? (
 						<GalleryBanner
 							isVisible={browseMode === 'featured'}
