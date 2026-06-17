@@ -81,7 +81,6 @@ const defaultSettings = {
 	serverLogging: false,
 	featuredContentType: 'both',
 	featuredItemCount: 10,
-	showFeaturedBar: true,
 	featuredBarStyle: 'moonfin',
 	featuredTrailerPreview: true,
 	featuredTrailerMuted: false,
@@ -160,17 +159,26 @@ const defaultSettings = {
 export {DEFAULT_HOME_ROWS, DEFAULT_SEERR_HOME_ROWS};
 
 const SERVER_TO_LOCAL = {
-	mediaBarEnabled: 'showFeaturedBar',
-	mediaBarContentType: 'featuredContentType',
+	mediaBarMode: 'featuredBarStyle',
 	mediaBarItemCount: 'featuredItemCount',
 	mediaBarTrailerPreview: 'featuredTrailerPreview',
+	mediaBarAutoAdvance: 'autoAdvance',
+	mediaBarIntervalMs: 'autoAdvanceInterval',
+	mediaBarSourceType: 'featuredContentType',
+	mediaBarTrailerAudio: 'featuredTrailerMuted',
+	mediaBarExcludedGenres: 'excludedGenres',
 	enableMultiServerLibraries: 'unifiedLibraryMode',
 	seasonalSurprise: 'seasonalTheme',
 	detailsScreenBlur: 'backdropBlurDetail',
+	detailsBackdropBlur: 'backdropBlurDetail',
 	browsingBlur: 'backdropBlurHome',
 	use24HourClock: 'clockDisplay',
 	homeRowOrder: 'homeRows',
 	theme: 'visualTheme',
+	focusColor: 'focusBorderColor',
+	watchedIndicator: 'watchedIndicatorBehavior',
+	posterSize: 'homeRowsPosterSize',
+	homeImageUseSeriesImage: 'useSeriesThumbnails'
 };
 const LOCAL_TO_SERVER = Object.fromEntries(
 	Object.entries(SERVER_TO_LOCAL).map(([s, l]) => [l, s])
@@ -233,6 +241,10 @@ const VALUE_CONVERSIONS = {
 		toServer: v => v === '24-hour',
 		fromServer: v => v ? '24-hour' : '12-hour'
 	},
+	featuredTrailerMuted: {
+		toServer: v => !v,
+		fromServer: v => !v
+	},
 	mediaBarLibraryIds: {
 		fromServer: normalizeGuidArray
 	},
@@ -269,8 +281,8 @@ const SYNCABLE_KEYS = [
 	'showShuffleButton', 'shuffleContentType', 'showGenresButton',
 	'showFavoritesButton', 'showLibrariesInToolbar', 'mergeContinueWatchingNextUp',
 	'mdblistEnabled', 'mdblistRatingSources', 'tmdbEpisodeRatingsEnabled',
-	'navbarPosition', 'showFeaturedBar', 'featuredBarStyle', 'featuredContentType', 'featuredItemCount',
-	'featuredTrailerPreview', 'unifiedLibraryMode', 'seasonalTheme',
+	'navbarPosition', 'featuredBarStyle', 'featuredContentType', 'featuredItemCount',
+	'featuredTrailerPreview', 'featuredTrailerMuted', 'unifiedLibraryMode', 'seasonalTheme',
 	'visualTheme', 'customThemeId',
 	'showRatingLabels',
 	'showRatingBadges',
@@ -281,10 +293,10 @@ const SYNCABLE_KEYS = [
 	'autoAdvance', 'autoAdvanceInterval',
 	'displayFavoritesRows', 'displayCollectionsRows', 'displayGenresRows', 'displaySeerrRows',
 	'favoritesRowSortBy', 'collectionsRowSortBy', 'genresRowSortBy', 'genresRowItemFilter',
-	'stillWatchingPrompt',
+	'stillWatchingPrompt', 'watchedIndicatorBehavior',
 	'backdropBlurHome', 'backdropBlurDetail',
 	'mediaBarSourceType', 'mediaBarLibraryIds', 'mediaBarCollectionIds',
-	'homeRows', 'homeRowsStyle', 'fullScreenRows',
+	'homeRows', 'homeRowsStyle', 'fullScreenRows', 'homeRowsPosterSize', 'useSeriesThumbnails',
 	'useDetailedSubHeadings',
 	'syncplayEnabled', 'syncplayAutoOpen',
 	'showSyncPlayButton',

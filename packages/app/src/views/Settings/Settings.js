@@ -180,7 +180,8 @@ const getFeaturedBarStyleOptions = () => [
 	{ value: 'makd', label: $L('MakD') },
 	{ value: 'gallery', label: $L('Gallery') },
 	{ value: 'banner', label: $L('Banner') },
-	{ value: 'bookshelf', label: $L('Bookshelf') }
+	{ value: 'bookshelf', label: $L('Bookshelf') },
+	{ value: 'off', label: $L('Off') }
 ];
 
 const getFeaturedItemCountOptions = () => [
@@ -1593,8 +1594,7 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 
 	const renderDynamicMediaBar = () => (
 		<>
-			{renderToggleItem('showFeaturedBar', $L('Media Bar Mode'), $L('Toggle media bar visibility'), 'movies')}
-			{renderOptionItem('featuredBarStyle', $L('Bar Style'), getFeaturedBarStyleOptions(), $L('Moonfin'), 'appscontents')}
+			{renderOptionItem('featuredBarStyle', $L('Media Bar Mode'), getFeaturedBarStyleOptions(), $L('Moonfin'), 'appscontents')}
 			{renderOptionItem('featuredContentType', $L('Content Type'), getContentTypeOptions(), $L('Movies & TV Shows'), 'list')}
 			{renderOptionItem('featuredItemCount', $L('Item Count'), getFeaturedItemCountOptions(), $L('10 items'), 'list')}
 			{renderNavItem(
