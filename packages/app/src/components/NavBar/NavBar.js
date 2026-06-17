@@ -82,12 +82,12 @@ const NavBar = ({
 	}, []);
 
 	const navPillStyle = useMemo(() => {
-		let navbarColor = toCssColor(activeTheme.colors.surface);
+		let navbarColor = activeTheme.transparentNavbarSurface ? 'transparent' : toCssColor(activeTheme.colors.surface);
 		if (settings.navbarColor) {
 			navbarColor = toCssColorWithAlpha(settings.navbarColor, settings.navbarOpacity/100);
 		}
 		return {
-			background: activeTheme.transparentNavbarSurface ? 'transparent' : navbarColor,
+			background: navbarColor,
 			backdropFilter: 'none',
 			WebkitBackdropFilter: 'none',
 			borderBottom: activeTheme.borders.navBorder
