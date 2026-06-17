@@ -1,4 +1,4 @@
-import {memo, useCallback, useState, useEffect, useRef} from 'react';
+import {memo, useCallback, useState, useEffect, useRef, useMemo} from 'react';
 import $L from '@enact/i18n/$L';
 import Spottable from '@enact/spotlight/Spottable';
 import SpotlightContainerDecorator, {spotlightDefaultClass} from '@enact/spotlight/SpotlightContainerDecorator';
@@ -10,6 +10,7 @@ import {useSyncPlay} from '../../context/SyncPlayContext';
 import JellyseerrIcon from '../icons/JellyseerrIcon';
 import SyncPlayIcon from '../icons/SyncPlayIcon';
 import SeerrIcon from '../icons/SeerrIcon';
+import {toCssColor, toCssColorWithAlpha} from '../../theme/themeSpec';
 import {KEYS} from '../../utils/keys';
 
 import css from './Sidebar.module.less';
@@ -39,7 +40,7 @@ const Sidebar = ({
 	onSyncPlay
 }) => {
 	const {user, serverUrl} = useAuth();
-	const {settings} = useSettings();
+	const {settings, activeTheme} = useSettings();
 	const {isEnabled: jellyseerrEnabled, isMoonfin, variant, displayName} = useJellyseerr();
 	const {isInGroup} = useSyncPlay();
 	const [clock, setClock] = useState('');
@@ -71,6 +72,23 @@ const Sidebar = ({
 		const interval = setInterval(updateClock, 60000);
 		return () => clearInterval(interval);
 	}, [settings.clockDisplay]);
+
+	const navStyle = useMemo(() => {
+		let navbarColor = activeTheme.transparentNavbarSurface ? 'transparent' : `linear-gradient(to right, ${toCssColorWithAlpha(activeTheme.colors.surface, 0.96)}, ${toCssColorWithAlpha(activeTheme.colors.surface, 0.88)}, ${toCssColorWithAlpha(activeTheme.colors.surface, 0.66)}, transparent)`;
+		if (settings.navbarColor) {
+			navbarColor = `linear-gradient(to right, ${toCssColorWithAlpha(settings.navbarColor, settings.navbarOpacity/100)}, ${toCssColorWithAlpha(settings.navbarColor, settings.navbarOpacity/100)}, ${toCssColorWithAlpha(settings.navbarColor, settings.navbarOpacity/105)}, ${toCssColorWithAlpha(settings.navbarColor, settings.navbarOpacity/110)}, ${toCssColorWithAlpha(settings.navbarColor, settings.navbarOpacity/115)}, transparent)`;
+		}
+		return {
+			background: expanded ? navbarColor : 'transparent',
+			backdropFilter: 'none',
+			WebkitBackdropFilter: 'none',
+			borderBottom: activeTheme.borders.navBorder
+			? `${activeTheme.borders.navBorder.width}px solid ${toCssColor(activeTheme.borders.navBorder.color)}`
+			: 'none',
+			color: toCssColor(activeTheme.colors.onSurface),
+								 textShadow: activeTheme.textGlow.length ? 'var(--theme-text-glow)' : 'none'
+		};
+	}, [activeTheme, settings.navbarColor, settings.navbarOpacity, expanded]);
 
 	const userAvatarUrl = user?.PrimaryImageTag
 		? `${serverUrl}/Users/${user.Id}/Images/Primary?tag=${user.PrimaryImageTag}&quality=90&maxHeight=100`
@@ -198,6 +216,7 @@ const Sidebar = ({
 	return (
 		<SidebarContainer
 			className={`${css.sidebar} ${expanded ? css.expanded : ''}`}
+			style={navStyle}
 			onKeyDown={handleNavKeyDown}
 			onMouseEnter={handleSidebarMouseEnter}
 			onMouseLeave={handleSidebarMouseLeave}

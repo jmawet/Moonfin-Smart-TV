@@ -8,7 +8,7 @@ export const RATING_SOURCES = {
 	tmdb:           {name: 'TMDb',                     iconFile: 'tmdb.svg',            color: '#01D277', textColor: '#fff'},
 	trakt:          {name: 'Trakt',                    iconFile: 'trakt.svg',           color: '#ED1C24', textColor: '#fff'},
 	tomatoes:       {name: 'Rotten Tomatoes (Critics)', iconFile: 'rt-fresh.svg',        color: '#FA320A', textColor: '#fff'},
-	popcorn:        {name: 'Rotten Tomatoes (Audience)',iconFile: 'rt-audience-up.svg',  color: '#FA320A', textColor: '#fff'},
+	tomatoes_audience: {name: 'Rotten Tomatoes (Audience)', iconFile: 'rt-audience-up.svg', color: '#FA320A', textColor: '#fff'},
 	metacritic:     {name: 'Metacritic',               iconFile: 'metacritic.svg',      color: '#FFCC34', textColor: '#000'},
 	metacriticuser: {name: 'Metacritic User',          iconFile: 'metacritic-user.svg', color: '#00CE7A', textColor: '#000'},
 	letterboxd:     {name: 'Letterboxd',               iconFile: 'letterboxd.svg',      color: '#00E054', textColor: '#fff'},
@@ -31,7 +31,7 @@ export const getIconUrl = (baseUrl, source, rating) => {
 		if (score < 60) return `${baseUrl}/Moonfin/Assets/rt-rotten.svg`;
 	}
 
-	if (source === 'popcorn' && score != null && score > 0) {
+	if (source === 'tomatoes_audience' && score != null && score > 0) {
 		if (score >= 90) return `${baseUrl}/Moonfin/Assets/rt-verified.svg`;
 		if (score < 60) return `${baseUrl}/Moonfin/Assets/rt-audience-down.svg`;
 	}
@@ -78,7 +78,7 @@ export const formatRating = (rating) => {
 		case 'trakt':
 			return score != null ? `${Number(score).toFixed(0)}%` : null;
 		case 'tomatoes':
-		case 'popcorn':
+		case 'tomatoes_audience':
 		case 'metacritic':
 		case 'metacriticuser':
 			return score != null ? `${Number(score).toFixed(0)}%` : (value != null ? `${Number(value).toFixed(0)}%` : null);
@@ -129,13 +129,22 @@ export const fetchRatings = async (serverUrl, item, options = {}) => {
 		const ratingsArr = data.ratings || data.Ratings;
 		const success = data.success ?? data.Success;
 		if (data && success !== false && ratingsArr) {
-			const ratings = ratingsArr.map(r => ({
-				source: r.Source || r.source,
-				value: r.Value ?? r.value,
-				score: r.Score ?? r.score,
-				votes: r.Votes ?? r.votes,
-				url: r.Url || r.url
-			}));
+			const ratings = ratingsArr.map(r => {
+				let source = r.Source || r.source;
+				// MDBList returns the RT audience score under `popcorn`; normalize
+				// to the shared `tomatoes_audience` key used by the server and the
+				// other clients so it matches the user's enabled sources.
+				if (typeof source === 'string' && source.toLowerCase() === 'popcorn') {
+					source = 'tomatoes_audience';
+				}
+				return {
+					source,
+					value: r.Value ?? r.value,
+					score: r.Score ?? r.score,
+					votes: r.Votes ?? r.votes,
+					url: r.Url || r.url
+				};
+			});
 			cache[cacheKey] = {ratings, fetchedAt: Date.now()};
 			return ratings;
 		}

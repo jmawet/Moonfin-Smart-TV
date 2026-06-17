@@ -297,6 +297,7 @@ const SYNCABLE_KEYS = [
 	'backdropBlurHome', 'backdropBlurDetail',
 	'mediaBarSourceType', 'mediaBarLibraryIds', 'mediaBarCollectionIds',
 	'homeRows', 'homeRowsStyle', 'fullScreenRows', 'homeRowsPosterSize', 'useSeriesThumbnails',
+	'useDetailedSubHeadings',
 	'syncplayEnabled', 'syncplayAutoOpen',
 	'showSyncPlayButton',
 	'videoStartDelay', 'liveTvDirect',
@@ -427,6 +428,15 @@ export function SettingsProvider({children}) {
 					// Community rating was always shown before it became toggleable, so
 					// preserve that for existing users by enabling 'stars' once.
 					stored.mdblistRatingSources = ['stars', ...stored.mdblistRatingSources];
+					migrated = true;
+				}
+				if (Array.isArray(stored.mdblistRatingSources) && stored.mdblistRatingSources.includes('popcorn')) {
+					// RT audience rating now uses the shared `tomatoes_audience` key
+					// (was the MDBList-native `popcorn`); migrate existing selections
+					// so they keep matching and sync consistently with the server.
+					stored.mdblistRatingSources = stored.mdblistRatingSources.map(
+						(s) => (s === 'popcorn' ? 'tomatoes_audience' : s)
+					);
 					migrated = true;
 				}
 				const merged = {...defaultSettings, ...stored};
