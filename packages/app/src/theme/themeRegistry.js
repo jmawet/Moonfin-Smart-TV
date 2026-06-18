@@ -107,18 +107,23 @@ const builtInThemes = Object.freeze({
 
 const builtInThemeIds = new Set(Object.keys(builtInThemes));
 let customThemes = {};
+// Themes saved from the Theme Store. Kept separate from customThemes so server
+// syncs (replaceCustomThemes) never clear them.
+let storeThemes = {};
 
 export const builtInThemeIdsList = Object.freeze(Array.from(builtInThemeIds));
 export const isBuiltInThemeId = (id) => builtInThemeIds.has(id);
 
 export const getAvailableThemes = () => ({
 	...builtInThemes,
+	...storeThemes,
 	...customThemes
 });
 
 export const getAvailableThemeList = () => {
 	const builtIns = Object.values(builtInThemes);
-	const customs = Object.values(customThemes).sort((left, right) => left.displayName.localeCompare(right.displayName));
+	const merged = {...storeThemes, ...customThemes};
+	const customs = Object.values(merged).sort((left, right) => left.displayName.localeCompare(right.displayName));
 	return [...builtIns, ...customs];
 };
 
@@ -140,4 +145,19 @@ export const registerCustomTheme = (spec) => {
 	}
 	customThemes = {...customThemes, [spec.id]: spec};
 	return customThemes[spec.id];
+};
+
+export const registerStoreTheme = (spec) => {
+	if (!spec || !spec.id || isBuiltInThemeId(spec.id)) {
+		throw new Error(`Cannot register store theme with reserved id "${spec?.id || ''}".`);
+	}
+	storeThemes = {...storeThemes, [spec.id]: spec};
+	return storeThemes[spec.id];
+};
+
+export const removeStoreTheme = (id) => {
+	if (!storeThemes[id]) return;
+	const next = {...storeThemes};
+	delete next[id];
+	storeThemes = next;
 };

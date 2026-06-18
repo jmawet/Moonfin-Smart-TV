@@ -15,6 +15,17 @@
 	overflow: hidden;
 }
 
+/* Details sits on a dark backdrop + scrim, so its text must stay light
+   regardless of the active theme's onSurface/onBackground (a light custom theme
+   would otherwise render dark, unreadable text here). Neon Pulse keeps its own
+   accent tint via its dedicated block below, so it is excluded. */
+:global(html:not([data-theme-id='neon_pulse'])) .page {
+	--theme-text-primary: #ffffff;
+	--theme-text-secondary: rgba(255, 255, 255, 0.7);
+	--theme-text-muted: rgba(255, 255, 255, 0.5);
+	--theme-on-surface-rgb: 255, 255, 255;
+}
+
 /* Backdrop */
 .backdrop {
 	position: fixed;

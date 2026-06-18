@@ -2,7 +2,7 @@ import {createContext, useContext, useState, useEffect, useCallback, useMemo, us
 import {getFromStorage, saveToStorage} from '../services/storage';
 import {getMoonfinSettings, getMoonfinThemes, saveMoonfinProfile, moonfinPing} from '../services/jellyseerrApi';
 import {parseThemeSpec} from '../theme/themeSpec';
-import {getAvailableThemeList, getAvailableThemes, isBuiltInThemeId, replaceCustomThemes, resolveThemeById} from '../theme/themeRegistry';
+import {getAvailableThemeList, getAvailableThemes, isBuiltInThemeId, registerStoreTheme, removeStoreTheme, replaceCustomThemes, resolveThemeById} from '../theme/themeRegistry';
 
 const DEFAULT_HOME_ROWS = [
 	{id: 'resume', name: 'Continue Watching', enabled: true, order: 0},
@@ -447,6 +447,22 @@ export function SettingsProvider({children}) {
 		});
 	}, []);
 
+	// Restore Theme Store themes saved on this device. Kept in a separate
+	// registry bucket so server theme sync never clears them.
+	useEffect(() => {
+		getFromStorage('storeThemes').then((stored) => {
+			if (!stored || typeof stored !== 'object') return;
+			let registered = false;
+			for (const raw of Object.values(stored)) {
+				try {
+					registerStoreTheme(parseThemeSpec(raw));
+					registered = true;
+				} catch (e) { void e; /* skip malformed */ }
+			}
+			if (registered) setThemeCatalogVersion((value) => value + 1);
+		});
+	}, []);
+
 	useEffect(() => {
 		if (!loaded) return;
 
@@ -506,6 +522,32 @@ export function SettingsProvider({children}) {
 	const resetSettings = useCallback(() => {
 		setSettings(defaultSettings);
 		saveToStorage('settings', defaultSettings);
+	}, []);
+
+	// Validate + register + persist a theme saved from the Theme Store. Stores
+	// the raw theme JSON so it round-trips through parseThemeSpec on reload.
+	const saveStoreTheme = useCallback(async (rawTheme) => {
+		const spec = parseThemeSpec(rawTheme); // throws on invalid
+		registerStoreTheme(spec);
+		setThemeCatalogVersion((value) => value + 1);
+		const existing = (await getFromStorage('storeThemes')) || {};
+		existing[spec.id] = rawTheme;
+		await saveToStorage('storeThemes', existing);
+		return spec;
+	}, []);
+
+	const deleteStoreTheme = useCallback(async (id) => {
+		removeStoreTheme(id);
+		setThemeCatalogVersion((value) => value + 1);
+		const existing = (await getFromStorage('storeThemes')) || {};
+		delete existing[id];
+		await saveToStorage('storeThemes', existing);
+		setSettings((prev) => {
+			if (prev.customThemeId !== id) return prev;
+			const updated = {...prev, customThemeId: ''};
+			saveToStorage('settings', updated);
+			return updated;
+		});
 	}, []);
 
 	const syncFromServer = useCallback(async (serverUrl, token) => {
@@ -587,7 +629,9 @@ export function SettingsProvider({children}) {
 			updateSettings,
 			selectThemeById,
 			resetSettings,
-			syncFromServer
+			syncFromServer,
+			saveStoreTheme,
+			deleteStoreTheme
 		}}>
 			{children}
 		</SettingsContext.Provider>

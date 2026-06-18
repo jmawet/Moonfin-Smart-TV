@@ -16,6 +16,7 @@ import {isBackKey} from '../../utils/keys';
 import ClearDataDialog from '../../components/ClearDataDialog';
 import SpottableInput from '../../components/SpottableInput/SpottableInput';
 import {clearAllStorage} from '../../services/storage';
+import {fetchThemeStoreCatalog, fetchThemeJson} from '../../services/themeStoreApi';
 import {getSeerrHomeRowConfigs} from '../../utils/seerrHomeRows';
 import {MATERIAL_ICON_PATHS} from './materialIconMap';
 
@@ -624,7 +625,11 @@ const renderChevron = () => (
 
 const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 	const { api, serverUrl, accessToken, hasMultipleServers, logoutAll } = useAuth();
-	const { settings, updateSetting, updateSettings, resetSettings, availableThemes, activeThemeId, selectThemeById } = useSettings();
+	const { settings, updateSetting, updateSettings, resetSettings, availableThemes, activeThemeId, selectThemeById, saveStoreTheme, deleteStoreTheme } = useSettings();
+	const [themeStoreCatalog, setThemeStoreCatalog] = useState([]);
+	const [themeStoreLoading, setThemeStoreLoading] = useState(false);
+	const [themeStoreError, setThemeStoreError] = useState(false);
+	const [themeStoreBusyId, setThemeStoreBusyId] = useState(null);
 	const { capabilities } = useDeviceInfo();
 	const jellyseerr = useJellyseerr();
 	const isSeerr = jellyseerr.isMoonfin && jellyseerr.variant === 'seerr';
@@ -708,6 +713,8 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 			} else if (cv.view === 'themes') {
 				const selectedId = availableThemes.find((t) => t.id === activeThemeId)?.id;
 				Spotlight.focus(selectedId ? `theme-card-${selectedId}` : 'themes-view');
+			} else if (cv.view === 'themeStore') {
+				Spotlight.focus('theme-store-view');
 			} else if (cv.view === 'homeRows') {
 				Spotlight.focus('homerows-view');
 			} else if (cv.view === 'seerrHomeRows') {
@@ -888,6 +895,40 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 	const openThemes = useCallback(() => {
 		pushView({ view: 'themes', returnFocusTo: 'setting-themeSelection' });
 	}, [pushView]);
+
+	const openThemeStore = useCallback(() => {
+		pushView({ view: 'themeStore', returnFocusTo: 'setting-themeStore' });
+	}, [pushView]);
+
+	useEffect(() => {
+		if (currentView.view !== 'themeStore' || themeStoreCatalog.length > 0 || themeStoreLoading) return;
+		setThemeStoreLoading(true);
+		setThemeStoreError(false);
+		fetchThemeStoreCatalog()
+			.then((list) => setThemeStoreCatalog(list))
+			.catch(() => setThemeStoreError(true))
+			.finally(() => setThemeStoreLoading(false));
+	}, [currentView.view, themeStoreCatalog.length, themeStoreLoading]);
+
+	// Store cards act like install/uninstall: saving applies immediately; a saved
+	// theme is removed here (it's still selectable from the Theme picker).
+	const handleStoreThemeClick = useCallback(async (entry) => {
+		if (themeStoreBusyId) return;
+		setThemeStoreBusyId(entry.id);
+		try {
+			if (availableThemes.some((t) => t.id === entry.id)) {
+				await deleteStoreTheme(entry.id);
+			} else {
+				const raw = await fetchThemeJson(entry.file);
+				const spec = await saveStoreTheme(raw);
+				selectThemeById(spec.id);
+			}
+		} catch (e) {
+			void e;
+		} finally {
+			setThemeStoreBusyId(null);
+		}
+	}, [themeStoreBusyId, availableThemes, selectThemeById, saveStoreTheme, deleteStoreTheme]);
 
 	const openRatingSources = useCallback(() => {
 		setTempRatingSources(Array.isArray(settings.mdblistRatingSources) ? [...settings.mdblistRatingSources] : []);
@@ -1448,6 +1489,12 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 	const renderPersonalizationGeneralStyle = () => (
 		<>
 			{renderOptionItem('uiLanguage', $L('App Language'), getUiLanguageOptions(), $L('English'), 'language')}
+			{renderNavItem(
+				'themeStore',
+				$L('Theme Store'),
+				$L('Browse and save community themes'),
+				openThemeStore
+			)}
 			{renderNavItem(
 				'themeSelection',
 				$L('Theme'),
@@ -2223,6 +2270,49 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 		</ViewContainer>
 	);
 
+	const renderThemeStoreView = () => (
+		<ViewContainer className={css.viewContainer} spotlightId='theme-store-view'>
+			<div className={css.listContent} onFocus={handleListFocus}>
+				<div className={css.listInner}>
+					{renderSectionTitle($L('Theme Store'))}
+					{themeStoreLoading ? (
+						<div className={css.themeStoreMessage}>{$L('Loading themes…')}</div>
+					) : themeStoreError ? (
+						<div className={css.themeStoreMessage}>{$L('Couldn’t load the Theme Store. Check your connection and try again.')}</div>
+					) : themeStoreCatalog.length === 0 ? (
+						<div className={css.themeStoreMessage}>{$L('No themes are available right now.')}</div>
+					) : (
+						<div className={css.themeCardList}>
+							{themeStoreCatalog.map((entry) => {
+								const saved = availableThemes.some((t) => t.id === entry.id);
+								const busy = themeStoreBusyId === entry.id;
+								return (
+									<SpottableDiv
+										key={entry.id}
+										className={css.themeCard}
+										onClick={() => handleStoreThemeClick(entry)}
+										spotlightId={`store-theme-${entry.id}`}
+									>
+										<div className={css.themeCardHeader}>
+											<div className={css.themeCardName}>{entry.displayName}</div>
+											{saved && <div className={css.themeCardCheck}>✓</div>}
+										</div>
+										{entry.description ? (
+											<div className={css.themeCardDescription}>{entry.description}</div>
+										) : null}
+										<div className={css.themeStoreCardAction}>
+											{busy ? $L('Working…') : saved ? $L('Remove') : $L('Save & apply')}
+										</div>
+									</SpottableDiv>
+								);
+							})}
+						</div>
+					)}
+				</div>
+			</div>
+		</ViewContainer>
+	);
+
 	const renderSeerrHomeRowsView = () => {
 		const enabledMap = new Map((settings.seerrHomeRows || []).map((r) => [r.id, r.enabled]));
 		return (
@@ -2612,6 +2702,7 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 			{currentView.view === 'subcategory' && renderSubcategoryView()}
 			{currentView.view === 'options' && renderOptionsView()}
 			{currentView.view === 'themes' && renderThemesView()}
+			{currentView.view === 'themeStore' && renderThemeStoreView()}
 			{currentView.view === 'homeRows' && renderHomeRowsView()}
 			{currentView.view === 'seerrHomeRows' && renderSeerrHomeRowsView()}
 			{currentView.view === 'ratingSources' && renderRatingSourcesView()}
