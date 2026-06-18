@@ -10,7 +10,7 @@ import {useSyncPlay} from '../../context/SyncPlayContext';
 import JellyseerrIcon from '../icons/JellyseerrIcon';
 import SyncPlayIcon from '../icons/SyncPlayIcon';
 import SeerrIcon from '../icons/SeerrIcon';
-import {toCssColor, toCssColorWithAlpha} from '../../theme/themeSpec';
+import {toCssColor, toCssColorWithAlpha, toSafeCssColorWithAlpha} from '../../theme/themeSpec';
 import {KEYS} from '../../utils/keys';
 
 import css from './Sidebar.module.less';
@@ -75,8 +75,12 @@ const Sidebar = ({
 
 	const navStyle = useMemo(() => {
 		let navbarColor = activeTheme.transparentNavbarSurface ? 'transparent' : `linear-gradient(to right, ${toCssColorWithAlpha(activeTheme.colors.surface, 0.96)}, ${toCssColorWithAlpha(activeTheme.colors.surface, 0.88)}, ${toCssColorWithAlpha(activeTheme.colors.surface, 0.66)}, transparent)`;
-		if (settings.navbarColor) {
-			navbarColor = `linear-gradient(to right, ${toCssColorWithAlpha(settings.navbarColor, settings.navbarOpacity/100)}, ${toCssColorWithAlpha(settings.navbarColor, settings.navbarOpacity/100)}, ${toCssColorWithAlpha(settings.navbarColor, settings.navbarOpacity/105)}, ${toCssColorWithAlpha(settings.navbarColor, settings.navbarOpacity/110)}, ${toCssColorWithAlpha(settings.navbarColor, settings.navbarOpacity/115)}, transparent)`;
+		const c1 = toSafeCssColorWithAlpha(settings.navbarColor, settings.navbarOpacity/100);
+		const c2 = toSafeCssColorWithAlpha(settings.navbarColor, settings.navbarOpacity/105);
+		const c3 = toSafeCssColorWithAlpha(settings.navbarColor, settings.navbarOpacity/110);
+		const c4 = toSafeCssColorWithAlpha(settings.navbarColor, settings.navbarOpacity/115);
+		if (c1 && c2 && c3 && c4) {
+			navbarColor = `linear-gradient(to right, ${c1}, ${c1}, ${c2}, ${c3}, ${c4}, transparent)`;
 		}
 		return {
 			background: expanded ? navbarColor : 'transparent',

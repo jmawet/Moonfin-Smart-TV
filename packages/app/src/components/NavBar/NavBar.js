@@ -10,7 +10,7 @@ import {useSyncPlay} from '../../context/SyncPlayContext';
 import JellyseerrIcon from '../icons/JellyseerrIcon';
 import SyncPlayIcon from '../icons/SyncPlayIcon';
 import SeerrIcon from '../icons/SeerrIcon';
-import {toCssColor, toCssColorWithAlpha} from '../../theme/themeSpec';
+import {toCssColor, toSafeCssColorWithAlpha} from '../../theme/themeSpec';
 import {KEYS} from '../../utils/keys';
 
 import css from './NavBar.module.less';
@@ -83,9 +83,8 @@ const NavBar = ({
 
 	const navPillStyle = useMemo(() => {
 		let navbarColor = activeTheme.transparentNavbarSurface ? 'transparent' : toCssColor(activeTheme.colors.surface);
-		if (settings.navbarColor) {
-			navbarColor = toCssColorWithAlpha(settings.navbarColor, settings.navbarOpacity/100);
-		}
+		const safeColor = toSafeCssColorWithAlpha(settings.navbarColor, settings.navbarOpacity/100);
+		if (safeColor) navbarColor = safeColor;
 		return {
 			background: navbarColor,
 			backdropFilter: 'none',

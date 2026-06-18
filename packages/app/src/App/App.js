@@ -36,7 +36,7 @@ import ShuffleOverlay from '../components/ShuffleOverlay';
 import SpottableInput from '../components/SpottableInput/SpottableInput';
 import useInactivityTimer from '../hooks/useInactivityTimer';
 import {useThemeMusic} from '../hooks/useThemeMusic';
-import {buildThemeCssVars} from '../theme/themeSpec';
+import {buildThemeCssVars, toSafeRgbTriplet} from '../theme/themeSpec';
 import Login from '../views/Login';
 import Browse from '../views/Browse';
 
@@ -255,12 +255,9 @@ const AppContent = (props) => {
 			root.style.setProperty('--theme-focus-border-color', settings.focusBorderColor);
 		}
 		root.style.setProperty('--theme-navbar-opacity', ((settings.navbarOpacity ?? 100) / 100).toString());
-		if (settings.navbarColor) {
-			const hex = settings.navbarColor.replace('#', '');
-			const r = parseInt(hex.slice(0, 2), 16);
-			const g = parseInt(hex.slice(2, 4), 16);
-			const b = parseInt(hex.slice(4, 6), 16);
-			root.style.setProperty('--theme-navbar-color-rgb', `${r}, ${g}, ${b}`);
+		const rgb = toSafeRgbTriplet(settings.navbarColor);
+		if (rgb) {
+			root.style.setProperty('--theme-navbar-color-rgb', rgb);
 		} else {
 			root.style.removeProperty('--theme-navbar-color-rgb');
 		}

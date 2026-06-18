@@ -87,6 +87,13 @@ const normalizeHexColor = (value, fieldName) => {
 	throw new Error(`Theme field "${fieldName}" must be #RGB, #RRGGBB, or #AARRGGBB.`);
 };
 
+export const isValidHexColor = (value) => {
+	if (typeof value !== 'string') return false;
+	const raw = value.trim().replace(/^#/, '');
+	if (!/^[0-9a-fA-F]+$/.test(raw)) return false;
+	return raw.length === 3 || raw.length === 6 || raw.length === 8;
+};
+
 const parseNumber = (value, fieldName, fallback) => {
 	if (value === undefined || value === null) return fallback;
 	const parsed = Number(value);
@@ -360,3 +367,13 @@ export const buildThemeCssVars = (theme) => ({
 	'--theme-surface-variant-rgb': toRgbTriplet(theme.colors.surfaceVariant),
 	'--theme-scrim-rgb': toRgbTriplet(theme.colors.scrim)
 });
+
+export const toSafeCssColorWithAlpha = (hex, alphaMultiplier) => {
+	if (!isValidHexColor(hex)) return null;
+	return toCssColorWithAlpha(hex, alphaMultiplier);
+};
+
+export const toSafeRgbTriplet = (hex) => {
+	if (!isValidHexColor(hex)) return null;
+	return toRgbTriplet(hex);
+};
