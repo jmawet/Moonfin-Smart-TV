@@ -1,5 +1,5 @@
 <h1 align="center">Moonfin for Smart-TVs</h1>
-<h3 align="center">Enhanced Jellyfin client for webOS and Tizen TVs</h3>
+<h3 align="center">Premium Jellyfin and Emby client for webOS and Tizen TVs</h3>
 
 ---
 
@@ -17,7 +17,7 @@
 
 > **[Back to main Moonfin project](https://github.com/Moonfin-Client)**
 
-Moonfin is an enhanced Jellyfin client built with the **Enact/Sandstone framework**, optimized for Samsung Smart TVs (Tizen) and LG Smart TVs (webOS). A single shared codebase powers both platforms with native video pipelines tuned for each.
+Moonfin is a premium Jellyfin and Emby client built with the **Enact/Sandstone framework**, optimized for Samsung Smart TVs (Tizen) and LG Smart TVs (webOS). A single shared codebase powers both platforms with native video pipelines tuned for each.
 
 
 <p align="center">
@@ -40,15 +40,19 @@ Moonfin builds on the solid foundation of Jellyfin with targeted improvements fo
 - **Samsung AVPlay** (Tizen) and **Starfish/HTML5** (webOS) native video pipelines
 - Smooth playback with proper hardware decoding for H.264, HEVC, HDR10, HLG, and Dolby Vision (where supported)
 - Automatic DirectPlay to native transcode to hls.js fallback chain when a format isn't natively supported
+- **Accurate per-TV codec profiles**: Your device reports exactly what it can play, so more content direct plays instead of burning server CPU on transcodes
 - **Lossless audio passthrough**: DTS, DTS-HD, and Dolby TrueHD bitstreaming to a capable receiver, rechecked live when you switch audio outputs (experimental on webOS)
+- **Wide device support**: Runs on Samsung TVs going back to 2016 (Tizen 2.4) through the latest models, and LG webOS 3 and up
 - Enhanced player controls optimized for TV remote navigation
 
 ### Multi-Server & Unified Library Mode
+- **Emby server support**: Sign in to Emby servers through Emby Connect, not just Jellyfin
 - **Unified Library Mode**: Combine content from all connected Jellyfin servers into a single view
 - Browse, search, and play content across multiple servers seamlessly
 - Server badges show content origin when unified mode is enabled
 - Cross-server playback with proper progress tracking per server
 - Favorites, genres, and search aggregate results from all servers
+- **Quick Connect and fast user switching** from your avatar, with auto-login and last-server memory
 
 ### Jellyseerr Integration
 
@@ -71,6 +75,9 @@ Moonfin is the first smart TV client with native Jellyseerr support.
 - Dynamic library buttons automatically populate based on your Jellyfin libraries
 - One-click navigation to any library or collection directly from the navbar
 - Cleaner icon-based design for frequently used actions
+- Folder view with breadcrumb navigation for browsing nested library folders
+- Built-in photo and comic viewer for your image and comic libraries
+- **Samsung Smart Hub Preview**: Jump straight into your content from deep-linked cards on the TV's home screen
 
 ### Playback & Media Control
 - **Theme Music Playback**: Background theme music for TV shows and movies with volume control
@@ -78,6 +85,7 @@ Moonfin is the first smart TV client with native Jellyseerr support.
 - **Next Episode Countdown**: Skip button with countdown timer when next episode is available
 - **Trickplay Preview**: Thumbnail previews when scrubbing through video
 - **Media Segment Skipping**: Skip intros, credits, and other segments automatically
+- **Remote Media Keys**: Play, pause, fast-forward, rewind, and stop using your TV remote's media buttons
 - **SyncPlay (Watch Together)**: Synchronized "watch together" playback using Jellyfin's SyncPlay protocol
 - **Advanced Subtitle Rendering**: Client-side PGS image subtitles and styled ASS/SSA subtitles via libass, with embedded font support
 - **Subtitle Downloads**: Search for and download subtitles without leaving the app
@@ -101,8 +109,9 @@ Moonfin is the first smart TV client with native Jellyseerr support.
 
 ### UI Polish
 - **Built with Enact/Sandstone**: Modern React-based framework optimized for TV experiences
-- **Themes**: A full theme system with built-in themes, a custom theme menu, and per-device persistence
+- **Themes**: A full theme system with built-in themes, a Theme Store for installing community themes, a custom theme menu, and per-device persistence
 - **Accent Color Customization**: Personalize the UI with your preferred accent color
+- **Watched and favorite badges**: See watched status and favorites at a glance right on the cards
 - **Backdrop Blur Settings**: Customizable blur effects for home and details pages
 - **UI Scale**: Adjust the interface font size to suit your TV size and viewing distance
 - **Media Bar Styles**: Pick from 5 different media bars (Moonfin, MakD, Gallery, Banner, and Bookshelf) to showcase featured content on the home screen, each with auto-advance and smooth transitions
