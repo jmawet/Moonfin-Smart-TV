@@ -294,6 +294,9 @@ We welcome contributions to Moonfin!
 4. Test on Samsung and/or LG TV hardware
 5. Submit a pull request with a detailed description
 
+### Translations
+If you notice issues with translations in your language, you can contribute fixed tranlations on [weblate](https://translate.moonfin.io/). 
+
 ---
 
 ## Support & Community
