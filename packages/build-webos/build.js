@@ -220,7 +220,20 @@ try {
 		fs.unlinkSync(path.join(ROOT_DIR, f));
 	}
 
-	run(`npx ares-package ${DIST_DIR} -o ${ROOT_DIR} --no-minify`);
+	// Bundle the Node.js Luna proxy service (TLS fallback for old TVs whose CA
+	// store rejects Let's Encrypt; see packages/build-webos/service/service.js).
+	// `webos-service` is provided by the TV firmware at runtime, so the service
+	// dir is packaged as-is; no node_modules to install.
+	const SERVICE_DIR = path.join(__dirname, 'service');
+	let packageServiceArg = '';
+	if (fs.existsSync(path.join(SERVICE_DIR, 'services.json'))) {
+		packageServiceArg = ` ${SERVICE_DIR}`;
+		console.log('  Bundling proxy service into IPK.');
+	} else {
+		console.warn('  Proxy service dir missing; IPK will build WITHOUT the TLS proxy service.');
+	}
+
+	run(`npx ares-package ${DIST_DIR}${packageServiceArg} -o ${ROOT_DIR} --no-minify`);
 
 	// Rename to Moonfin_webOS_<version>.ipk
 	const generatedIpk = path.join(ROOT_DIR, `org.moonfin.webos_${appPkg.version}_all.ipk`);

@@ -2,7 +2,7 @@ import packageJson from '../../package.json';
 import {buildQueryString} from '../utils/urlCompat';
 import {normalizeServerUrl} from '../utils/serverUrl';
 import {classifyError} from '../utils/connectionErrors';
-import {fetchWithTimeout as sharedFetchWithTimeout} from '../utils/fetchTimeout';
+import {platformFetch} from './secureFetch';
 import {isTizen} from '../platform';
 const APP_VERSION = packageJson.version;
 
@@ -83,8 +83,10 @@ const DEFAULT_TIMEOUT_MS = 15000;
 const PLAYBACK_TIMEOUT_MS = 30000;
 export const HOME_ROW_ITEM_FIELDS = 'PrimaryImageAspectRatio,Overview,Genres,GenreItems,ProductionYear,RunTimeTicks,CommunityRating,CriticRating,ProviderIds,ImageTags,BackdropImageTags,ParentBackdropImageTags,ParentBackdropItemId,ParentThumbItemId,SeriesPrimaryImageTag,SeriesName,ParentIndexNumber,IndexNumber,UserData,AlbumArtist,AlbumId,AlbumPrimaryImageTag';
 
+// Routes through the webOS TLS proxy fallback (secureFetch) so Let's-Encrypt
+// servers work on old TVs whose CA store rejects them; native fetch elsewhere.
 const fetchWithTimeout = (url, options = {}, timeoutMs = DEFAULT_TIMEOUT_MS) =>
-	sharedFetchWithTimeout(url, options, timeoutMs);
+	platformFetch(url, options, timeoutMs);
 export const getDeviceId = () => deviceId;
 
 const request = async (endpoint, options = {}) => {

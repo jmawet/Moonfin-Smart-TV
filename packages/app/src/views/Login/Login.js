@@ -7,7 +7,7 @@ import {useAuth} from '../../context/AuthContext';
 import * as jellyfinApi from '../../services/jellyfinApi';
 import * as embyConnect from '../../services/embyConnect';
 import {generateCandidates} from '../../utils/serverUrl';
-import {classifyError, getConnectionMessage, getLoginMessage, isVersionSupported, INVALID_ADDRESS, SERVER_NOT_JELLYFIN, VERSION_UNSUPPORTED, MIN_SERVER_VERSION} from '../../utils/connectionErrors';
+import {classifyError, getConnectionMessage, getLoginMessage, isVersionSupported, INVALID_ADDRESS, SERVER_NOT_JELLYFIN, VERSION_UNSUPPORTED, INSECURE_CERT, MIN_SERVER_VERSION} from '../../utils/connectionErrors';
 import {KEYS} from '../../utils/keys';
 import SpottableInput from '../../components/SpottableInput/SpottableInput';
 
@@ -137,7 +137,13 @@ const Login = ({
 				}
 				break;
 			} catch (err) {
-				lastErrorType = classifyError(err) || lastErrorType;
+				const errType = classifyError(err);
+				// A cert rejection (from the https candidate / proxy probe) is the
+				// most actionable diagnosis, don't let a weaker network failure
+				// from a later http candidate mask it.
+				if (lastErrorType !== INSECURE_CERT) {
+					lastErrorType = errType || lastErrorType;
+				}
 				continue;
 			}
 		}

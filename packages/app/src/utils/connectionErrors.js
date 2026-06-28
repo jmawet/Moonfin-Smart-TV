@@ -5,6 +5,7 @@ export const SERVER_NOT_JELLYFIN = 'not_jellyfin';
 export const VERSION_UNSUPPORTED = 'version_unsupported';
 export const AUTH_FAILED = 'auth_failed';
 export const SERVER_ERROR = 'server_error';
+export const INSECURE_CERT = 'insecure_cert';
 
 export const MIN_SERVER_VERSION = '10.9.0';
 
@@ -15,7 +16,8 @@ const MESSAGES = {
 	[SERVER_NOT_JELLYFIN]: 'Server responded but does not appear to be Jellyfin or Emby.',
 	[VERSION_UNSUPPORTED]: 'Server version is not supported. Minimum: ' + MIN_SERVER_VERSION + '.',
 	[AUTH_FAILED]: 'Invalid username or password.',
-	[SERVER_ERROR]: 'Server error. Please try again later.'
+	[SERVER_ERROR]: 'Server error. Please try again later.',
+	[INSECURE_CERT]: 'Your TV rejected this server\'s security certificate. Check the TV\'s date & time, update webOS, or use a server whose certificate your TV trusts. Public servers using Let\'s Encrypt may not work on older TVs.'
 };
 
 const LOGIN_MESSAGES = {

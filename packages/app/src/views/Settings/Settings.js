@@ -13,6 +13,7 @@ import serverLogger from '../../services/serverLogger';
 import connectionPool from '../../services/connectionPool';
 import {probeHomeScreenSections, hssSectionToPluginSection} from '../../services/homeScreenSectionsService';
 import {isBackKey} from '../../utils/keys';
+import {isWebOS} from '../../platform';
 import ClearDataDialog from '../../components/ClearDataDialog';
 import SpottableInput from '../../components/SpottableInput/SpottableInput';
 import {clearAllStorage} from '../../services/storage';
@@ -1477,6 +1478,7 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 				'lockcircle'
 			)}
 			{renderOptionItem('serverSortBy', $L('Sort Servers By'), getServerSortOptions(), $L('Server Name'), 'arrowupdown')}
+			{isWebOS() && renderToggleItem('allowInsecureCerts', $L('Allow Untrusted Certificates'), $L('If your TV rejects a server\'s security certificate, fetch through the proxy without verifying it. Use only for servers you trust.'), 'lock')}
 		</>
 	);
 
