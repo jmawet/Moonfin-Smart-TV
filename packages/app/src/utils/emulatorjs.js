@@ -33,12 +33,6 @@ export const startEmulator = ({selector, core, gameUrl, biosUrl, gameName, setti
 
 const gm = () => window.EJS_emulator && window.EJS_emulator.gameManager;
 
-// libretro RetroPad button injection (index-based; matches the Flutter/native mapping).
-export const simulateInput = (index, pressed) => {
-	const g = gm();
-	if (g && g.simulateInput) g.simulateInput(0, index, pressed ? 1 : 0);
-};
-
 export const restart = () => { const g = gm(); if (g && g.restart) g.restart(); };
 export const toggleFastForward = (on) => { const g = gm(); if (g && g.toggleFastForward) g.toggleFastForward(on ? 1 : 0); };
 export const setPaused = (paused) => { const g = gm(); if (g && g.toggleMainLoop) g.toggleMainLoop(paused ? 0 : 1); };

@@ -39,6 +39,7 @@ import {useThemeMusic} from '../hooks/useThemeMusic';
 import {buildThemeCssVars, toSafeRgbTriplet} from '../theme/themeSpec';
 import Login from '../views/Login';
 import Browse from '../views/Browse';
+import {isGameLibrary} from '../utils/gameLibrary';
 
 const Details = lazy(() => import('../views/Details'));
 const Library = lazy(() => import('../views/Library'));
@@ -56,6 +57,9 @@ const SeerrDetails = lazy(() => import('../views/SeerrDetails'));
 const SeerrRequests = lazy(() => import('../views/SeerrRequests'));
 const SeerrBrowse = lazy(() => import('../views/SeerrBrowse'));
 const SeerrPerson = lazy(() => import('../views/SeerrPerson'));
+const Games = lazy(() => import('../views/Games'));
+const GameDetails = lazy(() => import('../views/GameDetails'));
+const GamePlayer = lazy(() => import('../views/GamePlayer'));
 
 import '../styles/perf-overrides.less';
 import css from './App.module.less';
@@ -107,7 +111,10 @@ const PANELS = {
 	SEERR_BROWSE: 16,
 	SEERR_PERSON: 17,
 	ADD_SERVER: 18,
-	ADD_USER: 19
+	ADD_USER: 19,
+	GAMES: 20,
+	GAME_DETAILS: 21,
+	GAME_PLAYER: 22
 };
 
 const AppContent = (props) => {
@@ -119,6 +126,9 @@ const AppContent = (props) => {
 	const [panelIndex, setPanelIndex] = useState(PANELS.LOGIN);
 	const [selectedItem, setSelectedItem] = useState(null);
 	const [selectedLibrary, setSelectedLibrary] = useState(null);
+	const [selectedGameLibrary, setSelectedGameLibrary] = useState(null);
+	const [selectedGame, setSelectedGame] = useState(null);
+	const [gameStartFresh, setGameStartFresh] = useState(false);
 	const [selectedPerson, setSelectedPerson] = useState(null);
 	const [selectedGenre, setSelectedGenre] = useState(null);
 	const [genreFilter, setGenreFilter] = useState(null);
@@ -606,10 +616,28 @@ const AppContent = (props) => {
 			navigateTo(PANELS.LIVETV);
 			return;
 		}
+		if (isGameLibrary(library.CollectionType, library.Name)) {
+			setSelectedGameLibrary(library);
+			navigateTo(PANELS.GAMES);
+			return;
+		}
 		setSelectedLibrary(library);
 		setGenreFilter(null);
 		navigateTo(PANELS.LIBRARY);
 	}, [api, navigateTo, settings.liveTvDirect]);
+
+	const handleSelectGame = useCallback((gameLibrary, game) => {
+		setSelectedGameLibrary(gameLibrary);
+		setSelectedGame(game);
+		navigateTo(PANELS.GAME_DETAILS);
+	}, [navigateTo]);
+
+	const handlePlayGame = useCallback((gameLibrary, game, opts) => {
+		setSelectedGameLibrary(gameLibrary);
+		setSelectedGame(game);
+		setGameStartFresh(!!(opts && opts.fresh));
+		navigateTo(PANELS.GAME_PLAYER);
+	}, [navigateTo]);
 
 	const handlePlay = useCallback((item, resume, options) => {
 		if (item.MediaType === 'Book' && item.Path?.toLowerCase().endsWith('.cbz')) {
@@ -1155,6 +1183,39 @@ const AppContent = (props) => {
 								isAddingUser
 								currentServerUrl={serverUrl}
 								currentServerName={serverName}
+							/>
+						)}
+					</Panel>
+					<Panel>
+						{panelIndex === PANELS.GAMES && (
+							<Games
+								library={selectedGameLibrary}
+								onSelectGame={handleSelectGame}
+								onHome={handleHome}
+								backHandlerRef={backHandlerRef}
+							/>
+						)}
+					</Panel>
+					<Panel>
+						{panelIndex === PANELS.GAME_DETAILS && (
+							<GameDetails
+								library={selectedGameLibrary}
+								gameId={selectedGame?.id}
+								initialGame={selectedGame}
+								onPlay={handlePlayGame}
+								onSelectGame={handleSelectGame}
+								backHandlerRef={backHandlerRef}
+							/>
+						)}
+					</Panel>
+					<Panel>
+						{panelIndex === PANELS.GAME_PLAYER && selectedGame && (
+							<GamePlayer
+								library={selectedGameLibrary}
+								game={selectedGame}
+								startFresh={gameStartFresh}
+								onBack={handleBack}
+								backHandlerRef={backHandlerRef}
 							/>
 						)}
 					</Panel>

@@ -1,0 +1,208 @@
+import {useState, useEffect, useRef, useCallback} from 'react';
+import $L from '@enact/i18n/$L';
+import Spotlight from '@enact/spotlight';
+import Spottable from '@enact/spotlight/Spottable';
+import SpotlightContainerDecorator from '@enact/spotlight/SpotlightContainerDecorator';
+
+import LoadingSpinner from '../../components/LoadingSpinner';
+import * as gamesApi from '../../services/gamesApi';
+import * as ejs from '../../utils/emulatorjs';
+
+import css from './GamePlayer.module.less';
+
+const SpottableRow = Spottable('div');
+const OverlayContainer = SpotlightContainerDecorator({enterTo: 'default-element', restrict: 'self-only'}, 'div');
+
+const GamePlayer = ({library, game, startFresh, onBack, backHandlerRef}) => {
+	const [ready, setReady] = useState(false);
+	const [error, setError] = useState(null);
+	const [overlayOpen, setOverlayOpen] = useState(false);
+	const [settingsOpen, setSettingsOpen] = useState(false);
+	const [options, setOptions] = useState([]);
+	const [fastForward, setFastForward] = useState(false);
+	const [hasSave, setHasSave] = useState(false);
+
+	const blobs = useRef([]);
+	const exiting = useRef(false);
+	const stateRef = useRef({overlayOpen: false, settingsOpen: false});
+	stateRef.current = {overlayOpen, settingsOpen};
+
+	useEffect(() => {
+		let cancelled = false;
+		const libraryId = library?.Id;
+		(async () => {
+			try {
+				const [romUrl, settingsJson, existing] = await Promise.all([
+					gamesApi.getRomBlobUrl(libraryId, game.id),
+					gamesApi.getSettingsBlob(),
+					startFresh ? Promise.resolve(null) : gamesApi.getStateBytes(game.id)
+				]);
+				if (cancelled) return;
+				blobs.current.push(romUrl);
+				let biosUrl;
+				if (game.bios && game.bios.length) {
+					biosUrl = await gamesApi.getBiosBlobUrl(libraryId, game.bios[0].id);
+					if (cancelled) return;
+					blobs.current.push(biosUrl);
+				}
+				setHasSave(existing != null);
+				await ejs.startEmulator({
+					selector: '#game',
+					core: game.core,
+					gameUrl: romUrl,
+					biosUrl,
+					gameName: game.title,
+					settingsJson
+				});
+				if (cancelled) return;
+				if (existing) { try { ejs.loadState(existing); } catch (e) { /* ignore */ } }
+				setReady(true);
+			} catch (e) {
+				if (!cancelled) setError(e.status === 404 ? $L('Game file not found.') : $L('Could not start this game on this device.'));
+			}
+		})();
+		return () => {
+			cancelled = true;
+			ejs.destroyEmulator();
+			blobs.current.forEach((u) => { try { URL.revokeObjectURL(u); } catch (e2) { /* ignore */ } });
+			blobs.current = [];
+		};
+	}, [library, game, startFresh]);
+
+	const saveState = useCallback(async () => {
+		try {
+			const bytes = ejs.getState();
+			if (bytes && bytes.length) { await gamesApi.putStateBytes(game.id, bytes); setHasSave(true); }
+		} catch (e) { /* ignore */ }
+	}, [game]);
+
+	const exit = useCallback(async () => {
+		if (exiting.current) return;
+		exiting.current = true;
+		await saveState();
+		try { gamesApi.putSettingsBlob(ejs.getSettingsJson()); } catch (e) { /* ignore */ }
+		if (onBack) onBack();
+	}, [saveState, onBack]);
+
+	// While playing, Spotlight is paused so the arrow/OK keys reach EmulatorJS instead of moving
+	// focus; it resumes only while the overlay is open.
+	const openOverlay = useCallback(() => {
+		ejs.setPaused(true);
+		Spotlight.resume();
+		setOverlayOpen(true);
+		setTimeout(() => Spotlight.focus('game-overlay-first'), 0);
+	}, []);
+	const closeOverlay = useCallback(() => {
+		setOverlayOpen(false);
+		setSettingsOpen(false);
+		Spotlight.pause();
+		ejs.setPaused(false);
+	}, []);
+
+	// BACK toggles the overlay (a TV remote has no Start/Select); Exit lives in the overlay.
+	useEffect(() => {
+		if (!backHandlerRef) return undefined;
+		backHandlerRef.current = () => {
+			const s = stateRef.current;
+			if (s.settingsOpen) { setSettingsOpen(false); setTimeout(() => Spotlight.focus('game-overlay-first'), 0); }
+			else if (s.overlayOpen) { closeOverlay(); }
+			else { openOverlay(); }
+			return true;
+		};
+		return () => { backHandlerRef.current = null; };
+	}, [backHandlerRef, openOverlay, closeOverlay]);
+
+	// Pause Spotlight once the game is running (resumed by the overlay).
+	useEffect(() => {
+		if (ready) Spotlight.pause();
+		return () => Spotlight.resume();
+	}, [ready]);
+
+	const openSettings = useCallback(() => {
+		setOptions(ejs.getOptions());
+		setSettingsOpen(true);
+		setTimeout(() => Spotlight.focus('game-setting-0'), 0);
+	}, []);
+
+	const changeOption = useCallback((opt, dir) => {
+		const idx = opt.choices.findIndex((c) => c.value === opt.current);
+		const next = ((idx < 0 ? 0 : idx) + dir + opt.choices.length) % opt.choices.length;
+		const value = opt.choices[next].value;
+		ejs.setOption(opt.id, value);
+		setOptions((prev) => prev.map((o) => (o.id === opt.id ? {...o, current: value} : o)));
+	}, []);
+
+	const toggleFF = useCallback(() => {
+		setFastForward((prev) => { ejs.toggleFastForward(!prev); return !prev; });
+	}, []);
+
+	const loadSave = useCallback(async () => {
+		const bytes = await gamesApi.getStateBytes(game.id);
+		if (bytes) ejs.loadState(bytes);
+		closeOverlay();
+	}, [game, closeOverlay]);
+
+	const actions = [
+		{label: $L('Resume'), fn: closeOverlay},
+		{label: $L('Save state'), fn: async () => { await saveState(); closeOverlay(); }},
+		hasSave ? {label: $L('Load state'), fn: loadSave} : null,
+		{label: $L('Restart'), fn: () => { ejs.restart(); closeOverlay(); }},
+		{label: `${$L('Fast-forward')}  ${fastForward ? $L('On') : $L('Off')}`, fn: toggleFF},
+		{label: $L('Emulator settings'), fn: openSettings},
+		{label: $L('Exit'), fn: exit, danger: true}
+	].filter(Boolean);
+
+	return (
+		<div className={css.root}>
+			<div id="game" className={css.game} />
+			{!ready && !error ? <div className={css.center}><LoadingSpinner /></div> : null}
+			{error ? <div className={css.center}><div className={css.message}>{error}</div></div> : null}
+
+			{overlayOpen && !settingsOpen ? (
+				<div className={css.scrim}>
+					<OverlayContainer className={css.panel}>
+						<div className={css.panelTitle}>{game.title}</div>
+						{actions.map((a, i) => (
+							<SpottableRow
+								key={a.label}
+								spotlightId={i === 0 ? 'game-overlay-first' : undefined}
+								className={a.danger ? `${css.row} ${css.danger}` : css.row}
+								onClick={a.fn}
+							>
+								{a.label}
+							</SpottableRow>
+						))}
+					</OverlayContainer>
+				</div>
+			) : null}
+
+			{settingsOpen ? (
+				<div className={css.scrim}>
+					<OverlayContainer className={css.panel}>
+						<div className={css.panelTitle}>{$L('Emulator settings')}</div>
+						{options.length === 0 ? (
+							<div className={css.empty}>{$L('This core has no adjustable options.')}</div>
+						) : options.map((opt, i) => {
+							const cur = opt.choices.find((c) => c.value === opt.current);
+							return (
+								<SpottableRow
+									key={opt.id}
+									spotlightId={i === 0 ? 'game-setting-0' : undefined}
+									className={css.settingRow}
+									onClick={() => changeOption(opt, 1)}
+									onSpotlightLeft={() => changeOption(opt, -1)}
+									onSpotlightRight={() => changeOption(opt, 1)}
+								>
+									<span className={css.settingLabel}>{opt.label}</span>
+									<span className={css.settingValue}>{cur ? cur.label : opt.current}</span>
+								</SpottableRow>
+							);
+						})}
+					</OverlayContainer>
+				</div>
+			) : null}
+		</div>
+	);
+};
+
+export default GamePlayer;
