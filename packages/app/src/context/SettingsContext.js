@@ -76,6 +76,8 @@ const defaultSettings = {
 	showFavoritesButton: true,
 	showLibrariesInToolbar: true,
 	mergeContinueWatchingNextUp: false,
+	hiddenContinueWatchingItems: null,
+	hiddenNextUpSeries: null,
 	showHomeBackdrop: true,
 	backdropBlurHome: 20,
 	backdropBlurDetail: 20,
@@ -287,6 +289,7 @@ const VALUE_CONVERSIONS = {
 const SYNCABLE_KEYS = [
 	'showShuffleButton', 'shuffleContentType', 'showGenresButton',
 	'showFavoritesButton', 'showLibrariesInToolbar', 'mergeContinueWatchingNextUp',
+	'hiddenContinueWatchingItems', 'hiddenNextUpSeries',
 	'mdblistEnabled', 'mdblistRatingSources', 'tmdbEpisodeRatingsEnabled',
 	'navbarPosition', 'featuredBarStyle', 'featuredContentType', 'featuredItemCount',
 	'featuredTrailerPreview', 'featuredTrailerMuted', 'unifiedLibraryMode', 'seasonalTheme',
