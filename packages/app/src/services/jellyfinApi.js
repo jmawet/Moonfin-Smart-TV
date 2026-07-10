@@ -320,6 +320,10 @@ export const api = {
 		return request(`/HomeScreen/Section/${encodeURIComponent(String(sectionType))}?${params.join('&')}`);
 	},
 
+	getCustomRow: (source, type) => {
+		return request(`/Moonfin/CustomRow/${encodeURIComponent(String(source))}/${encodeURIComponent(String(type))}`);
+	},
+
 	getMusicGenres: (params = {}) => {
 		const merged = {UserId: currentUser, SortBy: 'SortName', SortOrder: 'Ascending', Recursive: 'true'};
 		Object.keys(params).forEach(function (k) { merged[k] = String(params[k]); });
@@ -676,6 +680,10 @@ export const createApiForServer = (serverUrl, token, userId, serverTypeOverride 
 				params.push(`Language=${encodeURIComponent(String(language))}`);
 			}
 			return serverRequest(`/HomeScreen/Section/${encodeURIComponent(String(sectionType))}?${params.join('&')}`);
+		},
+
+		getCustomRow: (source, type) => {
+			return serverRequest(`/Moonfin/CustomRow/${encodeURIComponent(String(source))}/${encodeURIComponent(String(type))}`);
 		},
 
 		searchRemoteSubtitles: (itemId, language = 'eng', isPerfectMatch = null) => {
