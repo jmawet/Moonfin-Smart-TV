@@ -82,6 +82,19 @@ const getServerCredentials = (item) => {
 	return null;
 };
 
+// Rebuild the item shape carrying the current session's server so a mid playback
+// reload negotiates against that server rather than the default one
+const currentSessionItem = () => {
+	const creds = currentSession?.serverCredentials;
+	if (!creds) return undefined;
+	return {
+		_serverUrl: creds.serverUrl,
+		_serverAccessToken: creds.accessToken,
+		_serverUserId: creds.userId,
+		_serverType: creds.serverType
+	};
+};
+
 const selectMediaSource = (mediaSources, capabilities, options, passthroughSettings = DEFAULT_PASSTHROUGH_SETTINGS) => {
 	if (options.mediaSourceId) {
 		const source = mediaSources.find(s => s.Id === options.mediaSourceId);
@@ -969,6 +982,7 @@ export const changeAudioStream = async (streamIndex, currentPositionTicks) => {
 	// DirectStream (server-side remux) is quality-identical but honors track selection.
 	const newInfo = await getPlaybackInfo(currentSession.itemId, {
 		...currentSession,
+		item: currentSessionItem(),
 		audioStreamIndex: streamIndex,
 		startPositionTicks: currentPositionTicks ?? currentSession.startPositionTicks,
 		enableDirectPlay: false
@@ -985,6 +999,7 @@ export const changeSubtitleStream = async (streamIndex) => {
 
 	const newInfo = await getPlaybackInfo(currentSession.itemId, {
 		...currentSession,
+		item: currentSessionItem(),
 		subtitleStreamIndex: streamIndex,
 		...(forceTranscode && {
 			enableDirectPlay: false,
