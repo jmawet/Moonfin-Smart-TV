@@ -484,15 +484,13 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 					videoRef.current.pause();
 				}
 			}
-			// Report current progress when app is backgrounded. The TV may be
-			// powering off, which cancels a normal async report mid-flight and
-			// loses watch progress, instead use a beacon, which the OS delivers
-			// after teardown, and fall back to the async path if unavailable.
+			// report paused progress, not stopped. A stop here ends the session
+			// and can tear down the transcode while the app is only backgrounded,
+			// the real stop goes out on pagehide when the app is torn down
 			if (positionRef.current > 0) {
 				if (!playback.reportProgressBeacon(positionRef.current, {isPaused: true})) {
-					playback.reportProgress(positionRef.current);
+					playback.reportProgress(positionRef.current, {isPaused: true});
 				}
-				playback.reportStopBeacon(positionRef.current);
 			}
 		};
 
@@ -505,6 +503,15 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 						console.warn('[Player] Failed to resume playback:', err);
 					});
 				}
+				playback.reportProgress(positionRef.current, {isPaused: false, eventName: 'unpause'});
+			}
+		};
+
+		// backing out of the app entirely never reaches the unmount cleanup, so
+		// report the stop here or the session sits open on the server
+		const handleAppExit = () => {
+			if (positionRef.current > 0) {
+				playback.reportStopBeacon(positionRef.current);
 			}
 		};
 
@@ -518,10 +525,14 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 
 		const removeVisibilityHandler = setupVisibilityHandler(handleAppHidden, handleAppVisible);
 		const removeWebOSHandler = setupWebOSLifecycle(handleRelaunch);
+		window.addEventListener('pagehide', handleAppExit);
+		window.addEventListener('beforeunload', handleAppExit);
 
 		return () => {
 			removeVisibilityHandler();
 			removeWebOSHandler();
+			window.removeEventListener('pagehide', handleAppExit);
+			window.removeEventListener('beforeunload', handleAppExit);
 		};
 	}, []);
 
