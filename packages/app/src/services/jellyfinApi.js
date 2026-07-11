@@ -321,7 +321,9 @@ export const api = {
 	},
 
 	getCustomRow: (source, type) => {
-		return request(`/Moonfin/CustomRow/${encodeURIComponent(String(source))}/${encodeURIComponent(String(type))}`);
+		// The backend returns 400 without a non-empty params JSON, so send a minimal one.
+		const params = encodeURIComponent(JSON.stringify({source: String(source), type: String(type)}));
+		return request(`/Moonfin/CustomRows/Items?source=${encodeURIComponent(String(source))}&type=${encodeURIComponent(String(type))}&params=${params}`);
 	},
 
 	getMusicGenres: (params = {}) => {
@@ -683,7 +685,9 @@ export const createApiForServer = (serverUrl, token, userId, serverTypeOverride 
 		},
 
 		getCustomRow: (source, type) => {
-			return serverRequest(`/Moonfin/CustomRow/${encodeURIComponent(String(source))}/${encodeURIComponent(String(type))}`);
+			// The backend returns 400 without a non-empty params JSON, so send a minimal one.
+			const params = encodeURIComponent(JSON.stringify({source: String(source), type: String(type)}));
+			return serverRequest(`/Moonfin/CustomRows/Items?source=${encodeURIComponent(String(source))}&type=${encodeURIComponent(String(type))}&params=${params}`);
 		},
 
 		searchRemoteSubtitles: (itemId, language = 'eng', isPerfectMatch = null) => {

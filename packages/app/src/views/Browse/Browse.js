@@ -860,10 +860,16 @@ const Browse = ({
 
 	useEffect(() => {
 		const loadData = async () => {
+			// IMDb rows are only fetched by fetchAllData, so treat an enabled IMDb list as
+			// dynamic config. Otherwise enabling one shows nothing until the browse cache expires.
+			const hasEnabledImdbRow = homeRowsConfig.some(
+				(row) => row.enabled && row.id.startsWith('imdb-')
+			);
 			const hasDynamicRowConfig =
 				settings.displayFavoritesRows ||
 				settings.displayCollectionsRows ||
 				settings.displayGenresRows ||
+				hasEnabledImdbRow ||
 				(settings.pluginSections || []).some((section) => section?.enabled);
 
 			if (hasDynamicRowConfig || unifiedMode) {
@@ -917,6 +923,7 @@ const Browse = ({
 					userConfig = null; // Not supported in unified mode
 					randomItems = {Items: randomArray};
 					recentlyPlayed = null;
+					// IMDb custom rows are single-server only, so imdbResults stays empty in unified mode.
 				} else {
 					const enabledImdbRows = homeRowsConfig.filter(
 						(row) => row.enabled && row.id.startsWith('imdb-')
@@ -942,7 +949,25 @@ const Browse = ({
 							enabledImdbRows.map((row) => {
 								const serverId = TV_TO_SERVER_ROW[row.id] || row.id;
 								return api.getCustomRow('imdb', serverId)
-									.then((res) => ({ row, items: res?.Items || res || [] }))
+									.then((res) => {
+										if (!res || res.success !== true || !Array.isArray(res.items)) {
+											return { row, items: [] };
+										}
+										// These are external discovery items (no library Id / ImageTags),
+										// so map them to what the media card can render via _externalPosterUrl.
+										const items = res.items.map((it) => {
+											const imdbId = it.providerIds?.Imdb || null;
+											return {
+												Id: `imdb-${imdbId || `${serverId}-${it.rank}`}`,
+												Name: it.name,
+												Type: it.type,
+												ProductionYear: it.productionYear,
+												ProviderIds: {Imdb: imdbId},
+												_externalPosterUrl: it.posterUrl || null
+											};
+										});
+										return { row, items };
+									})
 									.catch(() => ({ row, items: [] }));
 							})
 						)
