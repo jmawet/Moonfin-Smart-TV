@@ -486,6 +486,10 @@ const SeerrRequests = ({onSelectItem, onClose, backHandlerRef, ...rest}) => {
 
 	const handleCloseIssue = useCallback(() => setActiveIssue(null), []);
 
+	const handleRetry = useCallback(() => {
+		reload(tab, tab === 'requests' ? requestFilter : issueFilter);
+	}, [tab, requestFilter, issueFilter, reload]);
+
 	const handleTabSelect = useCallback((value) => {
 		setTab(value);
 	}, []);
@@ -551,7 +555,7 @@ const SeerrRequests = ({onSelectItem, onClose, backHandlerRef, ...rest}) => {
 			return (
 				<Column align="center center" className={css.error}>
 					<BodyText>{error}</BodyText>
-					<Button onClick={() => reload(tab, tab === 'requests' ? requestFilter : issueFilter)}>
+					<Button onClick={handleRetry}>
 						{$L('Retry')}
 					</Button>
 				</Column>
