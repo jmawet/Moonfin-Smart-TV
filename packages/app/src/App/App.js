@@ -15,10 +15,12 @@ import {applyPerfTier} from '../utils/perfTier';
 import {isTizen, isWebOS} from '../platform';
 import {initVideo, cleanupVideoElement, setupVisibilityHandler, setupPlatformLifecycle} from '../services/video';
 import {SettingsProvider} from '../context/SettingsContext';
-import {SeerrProvider} from '../context/SeerrContext';
+import {SeerrProvider, useSeerr} from '../context/SeerrContext';
 import {SyncPlayProvider, useSyncPlay} from '../context/SyncPlayContext';
 import {useVersionCheck} from '../hooks/useVersionCheck';
 import UpdateNotification from '../components/UpdateNotification';
+import SeerrNotificationToast from '../components/SeerrNotificationToast';
+import AdminMessageDialog from '../components/AdminMessageDialog';
 import DebugOverlay from '../components/DebugOverlay'; // Red Button on TV remote toggles this
 import NavBar from '../components/NavBar';
 import Sidebar from '../components/Sidebar';
@@ -120,6 +122,7 @@ const PANELS = {
 const AppContent = (props) => {
 	const {isAuthenticated, isLoading, logout, serverUrl, serverName, api, user, hasMultipleServers, accessToken, connectionState, revalidateSession} = useAuth();
 	const {settings, activeTheme} = useSettings();
+	const {streamNotification, dismissStreamNotification, adminMessage, dismissAdminMessage} = useSeerr();
 	const themeMusic = useThemeMusic();
 	const {openDialog: openSyncPlay, closeDialog: closeSyncPlay, isDialogOpen: syncPlayDialogOpen, playQueueItem, clearPlayQueueItem, isInGroup: isSyncPlayInGroup, setNewQueue: syncPlaySetNewQueue} = useSyncPlay();
 	const unifiedMode = settings.unifiedLibraryMode && hasMultipleServers;
@@ -1255,6 +1258,15 @@ const AppContent = (props) => {
 				updateInfo={updateInfo}
 				formattedNotes={formattedNotes}
 				onDismiss={dismissUpdate}
+			/>
+			<SeerrNotificationToast
+				notification={streamNotification}
+				onDismiss={dismissStreamNotification}
+			/>
+			<AdminMessageDialog
+				open={!!adminMessage}
+				message={adminMessage}
+				onDismiss={dismissAdminMessage}
 			/>
 			{photoViewerItem && (
 				<PhotoViewer
