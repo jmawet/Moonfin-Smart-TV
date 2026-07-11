@@ -4,8 +4,10 @@ import Spotlight from '@enact/spotlight';
 import Spottable from '@enact/spotlight/Spottable';
 import SpotlightContainerDecorator from '@enact/spotlight/SpotlightContainerDecorator';
 
+import AdminMessageDialog from '../../components/AdminMessageDialog';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import * as gamesApi from '../../services/gamesApi';
+import {initVideo, keepScreenOn, setupVisibilityHandler} from '../../services/video';
 import * as ejs from '../../utils/emulatorjs';
 
 import css from './GamePlayer.module.less';
@@ -35,6 +37,7 @@ const SettingRow = memo(({opt, first, onChange}) => {
 const GamePlayer = ({library, game, startFresh, onBack, backHandlerRef}) => {
 	const [ready, setReady] = useState(false);
 	const [error, setError] = useState(null);
+	const [unsupported, setUnsupported] = useState(false);
 	const [overlayOpen, setOverlayOpen] = useState(false);
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [options, setOptions] = useState([]);
@@ -44,11 +47,19 @@ const GamePlayer = ({library, game, startFresh, onBack, backHandlerRef}) => {
 	const blobs = useRef([]);
 	const exiting = useRef(false);
 	const stateRef = useRef({overlayOpen: false, settingsOpen: false});
-	stateRef.current = {overlayOpen, settingsOpen, error};
+	stateRef.current = {overlayOpen, settingsOpen, error, unsupported};
+
+	// Fire-and-forget state upload for paths that can't await, like unmount and backgrounding.
+	const flushState = useCallback(() => {
+		try {
+			const bytes = ejs.getState();
+			if (bytes && bytes.length) gamesApi.putStateBytes(game.id, bytes).catch(() => {});
+		} catch (e) { /* emulator never booted */ }
+	}, [game]);
 
 	useEffect(() => {
 		if (!ejs.isSupported()) {
-			setError($L('Games require webOS 5 or Tizen 5 and newer.'));
+			setUnsupported(true);
 			return undefined;
 		}
 		let cancelled = false;
@@ -86,11 +97,16 @@ const GamePlayer = ({library, game, startFresh, onBack, backHandlerRef}) => {
 		})();
 		return () => {
 			cancelled = true;
+			// Best-effort save on unmount, skipped when the Exit action already saved.
+			if (!exiting.current) {
+				flushState();
+				gamesApi.putSettingsBlob(ejs.getSettingsJson());
+			}
 			ejs.destroyEmulator();
 			blobs.current.forEach((u) => { try { URL.revokeObjectURL(u); } catch (e2) { /* ignore */ } });
 			blobs.current = [];
 		};
-	}, [library, game, startFresh]);
+	}, [library, game, startFresh, flushState]);
 
 	const saveState = useCallback(async () => {
 		try {
@@ -127,7 +143,8 @@ const GamePlayer = ({library, game, startFresh, onBack, backHandlerRef}) => {
 		if (!backHandlerRef) return undefined;
 		backHandlerRef.current = () => {
 			const s = stateRef.current;
-			if (s.error) { if (onBack) onBack(); }
+			if (s.unsupported) { /* the unsupported dialog dismisses itself on BACK */ }
+			else if (s.error) { if (onBack) onBack(); }
 			else if (s.settingsOpen) { setSettingsOpen(false); setTimeout(() => Spotlight.focus('game-overlay-first'), 0); }
 			else if (s.overlayOpen) { closeOverlay(); }
 			else { openOverlay(); }
@@ -141,6 +158,38 @@ const GamePlayer = ({library, game, startFresh, onBack, backHandlerRef}) => {
 		if (ready) Spotlight.pause();
 		return () => Spotlight.resume();
 	}, [ready]);
+
+	// Keep the TV screen awake while the game runs. initVideo() loads the platform module
+	// first, since keepScreenOn throws before it loads.
+	useEffect(() => {
+		if (!ready) return undefined;
+		let released = false;
+		initVideo().then(() => { if (!released) return keepScreenOn(true); }).catch(() => {});
+		return () => {
+			released = true;
+			try { keepScreenOn(false); } catch (e) { /* impl never loaded */ }
+		};
+	}, [ready]);
+
+	// Pause the emulator when the app is backgrounded and save defensively, since Tizen
+	// may kill backgrounded apps.
+	useEffect(() => {
+		if (!ready) return undefined;
+		let remove;
+		initVideo().then(() => {
+			remove = setupVisibilityHandler(
+				() => {
+					ejs.setPaused(true);
+					flushState();
+				},
+				() => {
+					const s = stateRef.current;
+					if (!s.overlayOpen && !s.settingsOpen && !s.error) ejs.setPaused(false);
+				}
+			);
+		}).catch(() => {});
+		return () => { if (remove) remove(); };
+	}, [ready, flushState]);
 
 	const openSettings = useCallback(() => {
 		setOptions(ejs.getOptions());
@@ -179,8 +228,14 @@ const GamePlayer = ({library, game, startFresh, onBack, backHandlerRef}) => {
 	return (
 		<div className={css.root}>
 			<div id="game" className={css.game} />
-			{!ready && !error ? <div className={css.center}><LoadingSpinner /></div> : null}
+			{!ready && !error && !unsupported ? <div className={css.center}><LoadingSpinner /></div> : null}
 			{error ? <div className={css.center}><div className={css.message}>{error}</div></div> : null}
+			<AdminMessageDialog
+				open={unsupported}
+				title={$L('Games')}
+				message={unsupported ? ejs.unsupportedMessage() : null}
+				onDismiss={onBack}
+			/>
 
 			{overlayOpen && !settingsOpen ? (
 				<div className={css.scrim}>

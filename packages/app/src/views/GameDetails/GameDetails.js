@@ -3,9 +3,11 @@ import $L from '@enact/i18n/$L';
 import Spotlight from '@enact/spotlight';
 import Button from '@enact/sandstone/Button';
 
+import AdminMessageDialog from '../../components/AdminMessageDialog';
 import GameCard from '../../components/GameCard';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import * as gamesApi from '../../services/gamesApi';
+import {isSupported, unsupportedMessage} from '../../utils/emulatorjs';
 import {boxartUrl, snapUrl, titleScreenUrl, gameDisplayTitle, gameFallbackColor} from '../../utils/gameArt';
 
 import css from './GameDetails.module.less';
@@ -14,7 +16,7 @@ const metaLine = (game) => [
 	game.system,
 	game.year,
 	game.genre,
-	game.players ? (game.players === 1 ? $L('1 player') : `${game.players} ${$L('players')}`) : null
+	game.players ? (game.players === 1 ? $L('1 player') : $L('{count} players').replace('{count}', game.players)) : null
 ].filter(Boolean).join('  ·  ');
 
 const GameDetails = ({library, gameId, initialGame, onPlay, onSelectGame, backHandlerRef}) => {
@@ -22,6 +24,7 @@ const GameDetails = ({library, gameId, initialGame, onPlay, onSelectGame, backHa
 	const [loading, setLoading] = useState(!initialGame);
 	const [hasSave, setHasSave] = useState(false);
 	const [related, setRelated] = useState([]);
+	const [showUnsupported, setShowUnsupported] = useState(false);
 
 	const libraryId = library?.Id;
 
@@ -45,17 +48,28 @@ const GameDetails = ({library, gameId, initialGame, onPlay, onSelectGame, backHa
 
 	useEffect(() => {
 		if (!backHandlerRef) return undefined;
-		backHandlerRef.current = () => false; // let the app pop the panel
+		// While the unsupported dialog is open it handles BACK itself, otherwise the app pops the panel.
+		backHandlerRef.current = () => showUnsupported;
 		return () => { backHandlerRef.current = null; };
-	}, [backHandlerRef]);
+	}, [backHandlerRef, showUnsupported]);
 
 	useEffect(() => {
 		if (game) setTimeout(() => Spotlight.focus('game-play-btn'), 0);
 	}, [game]);
 
-	const play = useCallback((fresh) => onPlay && onPlay(library, game, {fresh}), [onPlay, library, game]);
+	const play = useCallback((fresh) => {
+		if (!isSupported()) {
+			setShowUnsupported(true);
+			return;
+		}
+		if (onPlay) onPlay(library, game, {fresh});
+	}, [onPlay, library, game]);
 	const handlePlay = useCallback(() => play(false), [play]);
 	const handleRestart = useCallback(() => play(true), [play]);
+	const dismissUnsupported = useCallback(() => {
+		setShowUnsupported(false);
+		setTimeout(() => Spotlight.focus('game-play-btn'), 0);
+	}, []);
 	const openRelated = useCallback((g) => onSelectGame && onSelectGame(library, g), [onSelectGame, library]);
 
 	if (loading) return <div className={css.center}><LoadingSpinner /></div>;
@@ -101,6 +115,12 @@ const GameDetails = ({library, gameId, initialGame, onPlay, onSelectGame, backHa
 					</div>
 				</div>
 			) : null}
+			<AdminMessageDialog
+				open={showUnsupported}
+				title={$L('Games')}
+				message={showUnsupported ? unsupportedMessage() : null}
+				onDismiss={dismissUnsupported}
+			/>
 		</div>
 	);
 };

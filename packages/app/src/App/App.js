@@ -171,6 +171,8 @@ const AppContent = (props) => {
 		isAuthenticated &&
 		panelIndex !== PANELS.LOGIN &&
 		(panelIndex !== PANELS.PLAYER || isPlayerPaused) &&
+		// Emulator input bypasses Spotlight (paused during gameplay), so inactivity never resets.
+		panelIndex !== PANELS.GAME_PLAYER &&
 		!showExitDialog &&
 		!showShuffleOverlay &&
 		!showSettingsPanel &&
@@ -964,6 +966,7 @@ const AppContent = (props) => {
 
 	const showNavBar = panelIndex !== PANELS.LOGIN &&
 		panelIndex !== PANELS.PLAYER &&
+		panelIndex !== PANELS.GAME_PLAYER &&
 		panelIndex !== PANELS.LIBRARY &&
 		panelIndex !== PANELS.ADD_SERVER &&
 		panelIndex !== PANELS.ADD_USER &&

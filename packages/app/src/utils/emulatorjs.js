@@ -4,17 +4,63 @@
 // fetched. Threads are off (no cross-origin isolation on app:// / file://), so single-threaded
 // cores only.
 
+import $L from '@enact/i18n/$L';
+
+import {isWebOS, isTizen} from '../platform';
+
 const CDN = 'https://cdn.emulatorjs.org/stable/data/';
 
 let loaderScript = null;
 
-// EmulatorJS cores are WebAssembly, which needs Chromium 57+. Older WebViews (webOS 3/4,
-// Tizen 2.4/3) lack it entirely, so games cannot run there no matter the polyfills.
+// EmulatorJS cores are WebAssembly, which needs Chromium 57+. Older WebViews (webOS 4 and
+// below at Chrome 53, Tizen 4 and below at Chrome 56) lack it entirely, so games can't run
+// there. The supported floor is webOS 5 (Chrome 68) and Tizen 5.0 (Chrome 63).
 export const isSupported = () =>
 	typeof WebAssembly === 'object' && typeof WebAssembly.instantiate === 'function';
 
-// The core needs a modern WebView (async/await, object spread); older ones fail to parse it and
-// EJS_ready never fires. Reject after this so the caller can show an error instead of hanging.
+// Maps a Chrome major version to the webOS marketing version it shipped with.
+const CHROME_TO_WEBOS = [[120, 25], [108, 24], [94, 23], [87, 22], [79, 6], [68, 5], [53, 4], [38, 3], [34, 2], [26, 1]];
+
+// Platform and detected OS version for the "not supported" dialog. The version is best-effort
+// from the UA. Tizen states it directly and webOS is derived from the Chrome major.
+export const supportInfo = () => {
+	const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+	let platform = null;
+	let version = null;
+	if (isTizen()) {
+		platform = 'tizen';
+		const m = ua.match(/Tizen\s([0-9]+(?:\.[0-9]+)?)/i);
+		if (m) version = m[1];
+	} else if (isWebOS()) {
+		platform = 'webos';
+		const m = ua.match(/Chrome\/(\d+)/);
+		if (m) {
+			const chrome = parseInt(m[1], 10);
+			const hit = CHROME_TO_WEBOS.find(([c]) => chrome >= c);
+			if (hit) version = String(hit[1]);
+		}
+	}
+	return {supported: isSupported(), platform, version};
+};
+
+// Localized "why games can't run here" message, specific to the detected platform.
+export const unsupportedMessage = () => {
+	const {platform, version} = supportInfo();
+	if (platform === 'webos') {
+		return version
+			? $L('This TV runs webOS {version}. Games require webOS 5 or newer.').replace('{version}', version)
+			: $L('Games require webOS 5 or newer.');
+	}
+	if (platform === 'tizen') {
+		return version
+			? $L('This TV runs Tizen {version}. Games require Tizen 5 or newer.').replace('{version}', version)
+			: $L('Games require Tizen 5 or newer.');
+	}
+	return $L('Games require webOS 5 or Tizen 5 and newer.');
+};
+
+// The core needs a modern WebView. Older ones fail to parse it and EJS_ready never fires,
+// so reject after this timeout and let the caller show an error instead of hanging.
 const READY_TIMEOUT = 40000;
 
 // Starts EmulatorJS in the element matching `selector` and resolves once the core is ready.

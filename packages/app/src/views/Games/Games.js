@@ -38,7 +38,7 @@ const Games = ({library, onSelectGame, onHome, backHandlerRef}) => {
 			})
 			.catch((e) => {
 				if (cancelled) return;
-				setError(e.message || 'Failed to load games');
+				setError(e.message || $L('Failed to load games'));
 				setLoading(false);
 			});
 		return () => { cancelled = true; };
