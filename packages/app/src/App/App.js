@@ -1,4 +1,4 @@
-import {useState, useCallback, useEffect, lazy, Suspense, useRef} from 'react';
+import {useState, useCallback, useEffect, useMemo, lazy, Suspense, useRef} from 'react';
 import ThemeDecorator from '@enact/sandstone/ThemeDecorator';
 import {Panels, Panel} from '@enact/sandstone/Panels';
 import Spottable from '@enact/spotlight/Spottable';
@@ -126,7 +126,15 @@ const AppContent = (props) => {
 	const {settings, activeTheme} = useSettings();
 	const {streamNotification, dismissStreamNotification, adminMessage, dismissAdminMessage} = useSeerr();
 	const themeMusic = useThemeMusic();
-	const {openDialog: openSyncPlay, closeDialog: closeSyncPlay, isDialogOpen: syncPlayDialogOpen, playQueueItem, clearPlayQueueItem, isInGroup: isSyncPlayInGroup, setNewQueue: syncPlaySetNewQueue} = useSyncPlay();
+	const {openDialog: openSyncPlay, closeDialog: closeSyncPlay, isDialogOpen: syncPlayDialogOpen, playQueueItem, clearPlayQueueItem, isInGroup: isSyncPlayInGroup, setNewQueue: syncPlaySetNewQueue, displayMessage: syncPlayMessage, clearDisplayMessage: clearSyncPlayMessage} = useSyncPlay();
+
+	const syncPlayToast = useMemo(() => (
+		syncPlayMessage ? {
+			key: `syncplay-${Date.now()}`,
+			title: syncPlayMessage.header || $L('SyncPlay'),
+			body: syncPlayMessage.text
+		} : null
+	), [syncPlayMessage]);
 	const unifiedMode = settings.unifiedLibraryMode && hasMultipleServers;
 	const [panelIndex, setPanelIndex] = useState(PANELS.LOGIN);
 	const [selectedItem, setSelectedItem] = useState(null);
@@ -1281,6 +1289,10 @@ const AppContent = (props) => {
 			<SeerrNotificationToast
 				notification={streamNotification}
 				onDismiss={dismissStreamNotification}
+			/>
+			<SeerrNotificationToast
+				notification={syncPlayToast}
+				onDismiss={clearSyncPlayMessage}
 			/>
 			<AdminMessageDialog
 				open={!!adminMessage}

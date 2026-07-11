@@ -64,6 +64,8 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 	const {isInGroup, lastCommand} = useSyncPlay();
 	const syncPlayCommandRef = useRef(false);
 	const lastProcessedCommandRef = useRef(null);
+	const suppressBufferingUntilRef = useRef(0);
+	const stallRecheckTimerRef = useRef(null);
 
 	const [mediaUrl, setMediaUrl] = useState(null);
 	const [mimeType, setMimeType] = useState('video/mp4');
@@ -2109,47 +2111,68 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 		lastProcessedCommandRef.current = lastCommand;
 
 		const {Command, PositionTicks, When} = lastCommand;
+		const delay = syncPlayService.getDelayToWhen(When);
 
-		syncPlayCommandRef.current = true;
+		const execute = () => {
+			if (!videoRef.current) return;
+			syncPlayCommandRef.current = true;
+			suppressBufferingUntilRef.current = Date.now() + syncPlayService.BUFFERING_SUPPRESS_MS;
 
-		switch (Command) {
-			case 'Unpause': {
-				const delay = syncPlayService.getDelayToWhen(When);
-				if (PositionTicks != null) seekToTicks(PositionTicks);
-				if (delay > 0) {
-					const t = setTimeout(() => {
-						videoRef.current?.play()?.catch?.(() => {});
-						syncPlayCommandRef.current = false;
-					}, delay);
-					return () => clearTimeout(t);
+			switch (Command) {
+				case 'Unpause': {
+					// Executing on time seeks to the commanded position. A late
+					// arrival seeks ahead by the elapsed time to catch up.
+					const target = delay > 0 ? PositionTicks : syncPlayService.getAdjustedPosition(PositionTicks, When);
+					if (target != null) seekToTicks(target);
+					videoRef.current.play()?.catch?.(() => {});
+					break;
 				}
-				videoRef.current.play()?.catch?.(() => {});
-				break;
+				case 'Pause': {
+					videoRef.current.pause();
+					if (PositionTicks != null) seekToTicks(PositionTicks);
+					break;
+				}
+				case 'Seek': {
+					if (PositionTicks != null) seekToTicks(PositionTicks);
+					break;
+				}
+				default:
+					break;
 			}
-			case 'Pause': {
-				videoRef.current.pause();
-				if (PositionTicks != null) seekToTicks(PositionTicks);
-				break;
-			}
-			case 'Seek': {
-				if (PositionTicks != null) seekToTicks(PositionTicks);
-				break;
-			}
-			case 'Stop': {
-				handleBack();
-				break;
-			}
-			default:
-				break;
+
+			syncPlayCommandRef.current = false;
+		};
+
+		if (Command === 'Stop') {
+			handleBack();
+			return;
 		}
 
-		syncPlayCommandRef.current = false;
+		if (delay > 50) {
+			const t = setTimeout(execute, delay);
+			return () => clearTimeout(t);
+		}
+		execute();
 	}, [lastCommand, seekToTicks, handleBack]);
 
 	useEffect(() => {
 		if (!isInGroup || !videoRef.current) return;
 
 		const reportBuffering = () => {
+			const remaining = suppressBufferingUntilRef.current - Date.now();
+			if (remaining > 0) {
+				// This 'waiting' came from our own command-driven seek. A genuine
+				// stall must still reach the server eventually, so re-check once
+				// the window expires ('waiting' won't fire again for it).
+				clearTimeout(stallRecheckTimerRef.current);
+				stallRecheckTimerRef.current = setTimeout(() => {
+					const v = videoRef.current;
+					if (v && v.readyState < 3 && !v.paused) {
+						syncPlayService.sendBufferingRequest(true, positionRef.current);
+					}
+				}, remaining + 100);
+				return;
+			}
 			syncPlayService.sendBufferingRequest(
 				!videoRef.current.paused,
 				positionRef.current
@@ -2157,6 +2180,7 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 		};
 
 		const reportReady = () => {
+			clearTimeout(stallRecheckTimerRef.current);
 			syncPlayService.sendReadyRequest(
 				!videoRef.current.paused,
 				positionRef.current
@@ -2169,6 +2193,7 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 		video.addEventListener('canplay', reportReady);
 
 		return () => {
+			clearTimeout(stallRecheckTimerRef.current);
 			video.removeEventListener('waiting', reportBuffering);
 			video.removeEventListener('playing', reportReady);
 			video.removeEventListener('canplay', reportReady);
@@ -2187,6 +2212,12 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 				e.preventDefault();
 				e.stopPropagation();
 				if (videoRef.current && videoRef.current.paused) {
+					// In a group the request goes to the server because acting
+					// locally would silently desync this client.
+					if (isInGroup && !syncPlayCommandRef.current) {
+						syncPlayService.sendPlayRequest();
+						return;
+					}
 					videoRef.current.play();
 				}
 				return;
@@ -2195,6 +2226,10 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 				e.preventDefault();
 				e.stopPropagation();
 				if (videoRef.current && !videoRef.current.paused) {
+					if (isInGroup && !syncPlayCommandRef.current) {
+						syncPlayService.sendPauseRequest();
+						return;
+					}
 					videoRef.current.pause();
 				}
 				return;
@@ -2305,7 +2340,7 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 
 		window.addEventListener('keydown', handleKeyDown, true);
 		return () => window.removeEventListener('keydown', handleKeyDown, true);
-	}, [controlsVisible, activeModal, closeModal, hideControls, handleBack, showControls, handlePlayPause, handleForward, handleRewind, currentTime, settings.seekStep, seekByOffset, handlePopupKeyDown, bottomButtons.length, isAudioMode, showSkipIntro, showSkipCredits, showNextEpisode, isLiveTV]);
+	}, [controlsVisible, activeModal, closeModal, hideControls, handleBack, showControls, handlePlayPause, handleForward, handleRewind, currentTime, settings.seekStep, seekByOffset, handlePopupKeyDown, bottomButtons.length, isAudioMode, showSkipIntro, showSkipCredits, showNextEpisode, isLiveTV, isInGroup]);
 
 	const displayTime = isSeeking ? (seekPosition / 10000000) : currentTime;
 	const progressPercent = duration > 0 ? (displayTime / duration) * 100 : 0;

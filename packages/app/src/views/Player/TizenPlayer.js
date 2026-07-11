@@ -75,6 +75,9 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 	const {isInGroup, lastCommand} = useSyncPlay();
 	const syncPlayCommandRef = useRef(false);
 	const lastProcessedCommandRef = useRef(null);
+	const suppressBufferingUntilRef = useRef(0);
+	const stallRecheckTimerRef = useRef(null);
+	const isBufferingRef = useRef(false);
 
 	const [isLoading, setIsLoading] = useState(true);
 	const [isBuffering, setIsBuffering] = useState(false);
@@ -1843,50 +1846,56 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 		lastProcessedCommandRef.current = lastCommand;
 
 		const {Command, PositionTicks, When} = lastCommand;
+		const delay = syncPlayService.getDelayToWhen(When);
 
-		syncPlayCommandRef.current = true;
+		const execute = () => {
+			syncPlayCommandRef.current = true;
+			suppressBufferingUntilRef.current = Date.now() + syncPlayService.BUFFERING_SUPPRESS_MS;
 
-		switch (Command) {
-			case 'Unpause': {
-				const delay = syncPlayService.getDelayToWhen(When);
-				if (PositionTicks != null) {
-					avplaySeek(Math.floor(PositionTicks / 10000)).catch(() => {});
+			switch (Command) {
+				case 'Unpause': {
+					// Executing on time seeks to the commanded position. A late
+					// arrival seeks ahead by the elapsed time to catch up.
+					let target = delay > 0 ? PositionTicks : syncPlayService.getAdjustedPosition(PositionTicks, When);
+					if (target != null) {
+						if (runTimeRef.current > 0) target = Math.min(runTimeRef.current, target);
+						avplaySeek(Math.floor(target / 10000)).catch(() => {});
+					}
+					avplayPlay();
+					setIsPaused(false);
+					break;
 				}
-				if (delay > 0) {
-					const t = setTimeout(() => {
-						avplayPlay();
-						setIsPaused(false);
-						syncPlayCommandRef.current = false;
-					}, delay);
-					return () => clearTimeout(t);
+				case 'Pause': {
+					avplayPause();
+					setIsPaused(true);
+					if (PositionTicks != null) {
+						avplaySeek(Math.floor(PositionTicks / 10000)).catch(() => {});
+					}
+					break;
 				}
-				avplayPlay();
-				setIsPaused(false);
-				break;
-			}
-			case 'Pause': {
-				avplayPause();
-				setIsPaused(true);
-				if (PositionTicks != null) {
-					avplaySeek(Math.floor(PositionTicks / 10000)).catch(() => {});
+				case 'Seek': {
+					if (PositionTicks != null) {
+						avplaySeek(Math.floor(PositionTicks / 10000)).catch(() => {});
+					}
+					break;
 				}
-				break;
+				default:
+					break;
 			}
-			case 'Seek': {
-				if (PositionTicks != null) {
-					avplaySeek(Math.floor(PositionTicks / 10000)).catch(() => {});
-				}
-				break;
-			}
-			case 'Stop': {
-				handleBack();
-				break;
-			}
-			default:
-				break;
+
+			syncPlayCommandRef.current = false;
+		};
+
+		if (Command === 'Stop') {
+			handleBack();
+			return;
 		}
 
-		syncPlayCommandRef.current = false;
+		if (delay > 50) {
+			const t = setTimeout(execute, delay);
+			return () => clearTimeout(t);
+		}
+		execute();
 	}, [lastCommand, handleBack]);
 
 	useEffect(() => {
@@ -1908,20 +1917,37 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 	}, [isInGroup]);
 
 	useEffect(() => {
+		isBufferingRef.current = isBuffering;
 		if (!isInGroup) return;
 		if (isBuffering) {
-			const state = avplayGetState();
-			syncPlayService.sendBufferingRequest(
-				state === 'PLAYING',
-				positionRef.current
-			);
+			const remaining = suppressBufferingUntilRef.current - Date.now();
+			if (remaining > 0) {
+				// This buffering came from our own command-driven seek. A genuine
+				// stall must still reach the server eventually, so re-check once
+				// the window expires (the state edge won't fire again for it).
+				clearTimeout(stallRecheckTimerRef.current);
+				stallRecheckTimerRef.current = setTimeout(() => {
+					if (isBufferingRef.current) {
+						syncPlayService.sendBufferingRequest(
+							avplayGetState() === 'PLAYING',
+							positionRef.current
+						);
+					}
+				}, remaining + 100);
+			} else {
+				syncPlayService.sendBufferingRequest(
+					avplayGetState() === 'PLAYING',
+					positionRef.current
+				);
+			}
 		} else if (avplayReadyRef.current) {
-			const state = avplayGetState();
+			clearTimeout(stallRecheckTimerRef.current);
 			syncPlayService.sendReadyRequest(
-				state === 'PLAYING',
+				avplayGetState() === 'PLAYING',
 				positionRef.current
 			);
 		}
+		return () => clearTimeout(stallRecheckTimerRef.current);
 	}, [isInGroup, isBuffering]);
 
 	// ==============================
@@ -1938,6 +1964,12 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 				showControls();
 				const state = avplayGetState();
 				if (state === 'PAUSED' || state === 'READY') {
+					// In a group the request goes to the server because acting
+					// locally would silently desync this client.
+					if (isInGroup && !syncPlayCommandRef.current) {
+						syncPlayService.sendPlayRequest();
+						return;
+					}
 					avplayPlay();
 					setIsPaused(false);
 				}
@@ -1949,6 +1981,10 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 				showControls();
 				const state = avplayGetState();
 				if (state === 'PLAYING') {
+					if (isInGroup && !syncPlayCommandRef.current) {
+						syncPlayService.sendPauseRequest();
+						return;
+					}
 					avplayPause();
 					setIsPaused(true);
 				}
@@ -2077,7 +2113,7 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 
 		window.addEventListener('keydown', handleKeyDown, true);
 		return () => window.removeEventListener('keydown', handleKeyDown, true);
-	}, [controlsVisible, activeModal, closeModal, hideControls, handleBack, showControls, handlePlayPause, handleForward, handleRewind, currentTime, duration, settings.seekStep, handlePopupKeyDown, bottomButtons.length, isAudioMode, scheduleDeferredSeek, showSkipIntro, showSkipCredits, showNextEpisode, isLiveTV]);
+	}, [controlsVisible, activeModal, closeModal, hideControls, handleBack, showControls, handlePlayPause, handleForward, handleRewind, currentTime, duration, settings.seekStep, handlePopupKeyDown, bottomButtons.length, isAudioMode, scheduleDeferredSeek, showSkipIntro, showSkipCredits, showNextEpisode, isLiveTV, isInGroup]);
 
 	// Calculate progress - use seekPosition when actively seeking for smooth scrubbing
 	const displayTime = isSeeking ? (seekPosition / 10000000) : currentTime;
