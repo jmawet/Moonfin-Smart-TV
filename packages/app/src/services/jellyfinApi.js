@@ -275,29 +275,6 @@ export const api = {
 		return request(`/Genres?UserId=${currentUser}&SortBy=${encodeURIComponent(sortBy)}&SortOrder=${encodeURIComponent(sortOrder)}&Recursive=true&IncludeItemTypes=${encodeURIComponent(includeItemTypes)}${params}`);
 	},
 
-	getInstalledPlugins: () => request('/Plugins'),
-
-	getHomeScreenMeta: () => request('/HomeScreen/Meta'),
-
-	getHomeScreenSections: (language = null) => {
-		const params = [`UserId=${currentUser}`];
-		if (language) {
-			params.push(`Language=${encodeURIComponent(String(language))}`);
-		}
-		return request(`/HomeScreen/Sections?${params.join('&')}`);
-	},
-
-	getHomeScreenSectionContent: (sectionType, additionalData = null, language = null) => {
-		const params = [`UserId=${currentUser}`];
-		if (additionalData !== null && additionalData !== undefined && String(additionalData) !== '') {
-			params.push(`AdditionalData=${encodeURIComponent(String(additionalData))}`);
-		}
-		if (language) {
-			params.push(`Language=${encodeURIComponent(String(language))}`);
-		}
-		return request(`/HomeScreen/Section/${encodeURIComponent(String(sectionType))}?${params.join('&')}`);
-	},
-
 	getMusicGenres: (params = {}) => {
 		const merged = {UserId: currentUser, SortBy: 'SortName', SortOrder: 'Ascending', Recursive: 'true'};
 		Object.keys(params).forEach(function (k) { merged[k] = String(params[k]); });
@@ -622,29 +599,6 @@ export const createApiForServer = (serverUrl, token, userId, serverTypeOverride 
 
 		getLocalTrailers: (itemId) =>
 			serverRequest(`/Users/${userId}/Items/${itemId}/LocalTrailers`),
-
-		getInstalledPlugins: () => serverRequest('/Plugins'),
-
-		getHomeScreenMeta: () => serverRequest('/HomeScreen/Meta'),
-
-		getHomeScreenSections: (language = null) => {
-			const params = [`UserId=${userId}`];
-			if (language) {
-				params.push(`Language=${encodeURIComponent(String(language))}`);
-			}
-			return serverRequest(`/HomeScreen/Sections?${params.join('&')}`);
-		},
-
-		getHomeScreenSectionContent: (sectionType, additionalData = null, language = null) => {
-			const params = [`UserId=${userId}`];
-			if (additionalData !== null && additionalData !== undefined && String(additionalData) !== '') {
-				params.push(`AdditionalData=${encodeURIComponent(String(additionalData))}`);
-			}
-			if (language) {
-				params.push(`Language=${encodeURIComponent(String(language))}`);
-			}
-			return serverRequest(`/HomeScreen/Section/${encodeURIComponent(String(sectionType))}?${params.join('&')}`);
-		},
 
 		searchRemoteSubtitles: (itemId, language = 'eng', isPerfectMatch = null) => {
 			const query = isPerfectMatch === null ? '' : `?IsPerfectMatch=${isPerfectMatch}`;
