@@ -713,5 +713,13 @@
 	"No servers linked to this Emby Connect account": "No servers linked to this Emby Connect account",
 	"Select a server": "Select a server",
 	"Sign in with your Emby Connect account": "Sign in with your Emby Connect account",
-	"Unable to connect to the selected server": "Unable to connect to the selected server"
+	"Unable to connect to the selected server": "Unable to connect to the selected server",
+	"IMDb Lists": "IMDb Lists",
+	"Choose which IMDb lists are active. Activating a list adds it to your Home Sections.": "Choose which IMDb lists are active. Activating a list adds it to your Home Sections.",
+	"IMDb Top 250 Movies": "IMDb Top 250 Movies",
+	"IMDb Top 250 TV Shows": "IMDb Top 250 TV Shows",
+	"IMDb Most Popular Movies": "IMDb Most Popular Movies",
+	"IMDb Most Popular TV Shows": "IMDb Most Popular TV Shows",
+	"IMDb Lowest Rated Movies": "IMDb Lowest Rated Movies",
+	"IMDb Top Rated English Movies": "IMDb Top Rated English Movies"
 }

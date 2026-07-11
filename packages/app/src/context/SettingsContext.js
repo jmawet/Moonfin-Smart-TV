@@ -19,7 +19,13 @@ const DEFAULT_HOME_ROWS = [
 	{id: 'favoriteAlbums', name: 'Favorite Albums', enabled: false, order: 11},
 	{id: 'favoriteSongs', name: 'Favorite Songs', enabled: false, order: 12},
 	{id: 'genres', name: 'Genres', enabled: false, order: 13},
-	{id: 'recently-released', name: 'Recently Released', enabled: false, order: 14}
+	{id: 'recently-released', name: 'Recently Released', enabled: false, order: 14},
+	{id: 'imdb-top250-movies', name: 'IMDb Top 250 Movies', enabled: false, order: 15},
+	{id: 'imdb-top250-tv', name: 'IMDb Top 250 TV Shows', enabled: false, order: 16},
+	{id: 'imdb-popular-movies', name: 'IMDb Most Popular Movies', enabled: false, order: 17},
+	{id: 'imdb-popular-tv', name: 'IMDb Most Popular TV Shows', enabled: false, order: 18},
+	{id: 'imdb-lowest-rated', name: 'IMDb Lowest Rated Movies', enabled: false, order: 19},
+	{id: 'imdb-top-english', name: 'IMDb Top Rated English Movies', enabled: false, order: 20}
 ];
 
 const DEFAULT_SEERR_HOME_ROWS = [
@@ -95,6 +101,12 @@ const defaultSettings = {
 	mdblistEnabled: true,
 	mdblistRatingSources: ['stars', 'imdb', 'tmdb', 'tomatoes', 'metacritic'],
 	tmdbEpisodeRatingsEnabled: true,
+	imdbTop250MoviesEnabled: false,
+	imdbTop250TvShowsEnabled: false,
+	imdbMostPopularMoviesEnabled: false,
+	imdbMostPopularTvShowsEnabled: false,
+	imdbLowestRatedMoviesEnabled: false,
+	imdbTopEnglishMoviesEnabled: false,
 	showClock: true,
 	clockDisplay: '24-hour',
 	autoLogin: true,
@@ -203,7 +215,13 @@ const TV_TO_SERVER_ROW = {
 	'favoriteMusicVideos': 'favoritemusicvideos',
 	'favoriteAlbums': 'favoritealbums',
 	'favoriteSongs': 'favoritesongs',
-	'genres': 'genres'
+	'genres': 'genres',
+	'imdb-top250-movies': 'imdb_top_250_movies',
+	'imdb-top250-tv': 'imdb_top_250_tv_shows',
+	'imdb-popular-movies': 'imdb_most_popular_movies',
+	'imdb-popular-tv': 'imdb_most_popular_tv_shows',
+	'imdb-lowest-rated': 'imdb_lowest_rated_movies',
+	'imdb-top-english': 'imdb_top_english_movies'
 };
 const SERVER_TO_TV_ROW = {
 	'latestmedia': 'latest-media',
@@ -218,8 +236,16 @@ const SERVER_TO_TV_ROW = {
 	'favoritemusicvideos': 'favoriteMusicVideos',
 	'favoritealbums': 'favoriteAlbums',
 	'favoritesongs': 'favoriteSongs',
-	'genres': 'genres'
+	'genres': 'genres',
+	'imdb_top_250_movies': 'imdb-top250-movies',
+	'imdb_top_250_tv_shows': 'imdb-top250-tv',
+	'imdb_most_popular_movies': 'imdb-popular-movies',
+	'imdb_most_popular_tv_shows': 'imdb-popular-tv',
+	'imdb_lowest_rated_movies': 'imdb-lowest-rated',
+	'imdb_top_english_movies': 'imdb-top-english'
 };
+
+export {TV_TO_SERVER_ROW};
 
 const mergeHomeRows = (rows) => {
 	if (!Array.isArray(rows)) return [...DEFAULT_HOME_ROWS];
@@ -295,6 +321,8 @@ const SYNCABLE_KEYS = [
 	'showFavoritesButton', 'showLibrariesInToolbar', 'mergeContinueWatchingNextUp',
 	'hiddenContinueWatchingItems', 'hiddenNextUpSeries',
 	'mdblistEnabled', 'mdblistRatingSources', 'tmdbEpisodeRatingsEnabled',
+	'imdbTop250MoviesEnabled', 'imdbTop250TvShowsEnabled', 'imdbMostPopularMoviesEnabled',
+	'imdbMostPopularTvShowsEnabled', 'imdbLowestRatedMoviesEnabled', 'imdbTopEnglishMoviesEnabled',
 	'navbarPosition', 'featuredBarStyle', 'featuredContentType', 'featuredItemCount',
 	'featuredTrailerPreview', 'featuredTrailerMuted', 'unifiedLibraryMode', 'seasonalTheme',
 	'visualTheme', 'customThemeId',

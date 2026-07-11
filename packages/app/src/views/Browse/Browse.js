@@ -2,7 +2,7 @@ import {useState, useEffect, useCallback, useRef, useMemo, useReducer} from 'rea
 import Spotlight from '@enact/spotlight';
 import $L from '@enact/i18n/$L';
 import {useAuth} from '../../context/AuthContext';
-import {useSettings} from '../../context/SettingsContext';
+import {useSettings, TV_TO_SERVER_ROW} from '../../context/SettingsContext';
 import {useSeerr} from '../../context/SeerrContext';
 import {ClassicMediaRow, ModernMediaRow} from '../../components/MediaRow';
 import SeerrTileRow from '../../components/SeerrTileRow';
@@ -431,8 +431,16 @@ const Browse = ({
 		if (FAVORITE_ROW_IDS.includes(rowId)) return settings.displayFavoritesRows;
 		if (rowId === 'collections') return settings.displayCollectionsRows;
 		if (rowId === 'genres') return settings.displayGenresRows;
+		if (rowId === 'imdb-top250-movies') return settings.imdbTop250MoviesEnabled;
+		if (rowId === 'imdb-top250-tv') return settings.imdbTop250TvShowsEnabled;
+		if (rowId === 'imdb-popular-movies') return settings.imdbMostPopularMoviesEnabled;
+		if (rowId === 'imdb-popular-tv') return settings.imdbMostPopularTvShowsEnabled;
+		if (rowId === 'imdb-lowest-rated') return settings.imdbLowestRatedMoviesEnabled;
+		if (rowId === 'imdb-top-english') return settings.imdbTopEnglishMoviesEnabled;
 		return true;
-	}, [settings.displayFavoritesRows, settings.displayCollectionsRows, settings.displayGenresRows]);
+	}, [settings.displayFavoritesRows, settings.displayCollectionsRows, settings.displayGenresRows,
+		settings.imdbTop250MoviesEnabled, settings.imdbTop250TvShowsEnabled, settings.imdbMostPopularMoviesEnabled,
+		settings.imdbMostPopularTvShowsEnabled, settings.imdbLowestRatedMoviesEnabled, settings.imdbTopEnglishMoviesEnabled]);
 
 	const filteredRows = useMemo(() => {
 		const enabledRowIds = homeRowsConfig.filter(r => r.enabled).map(r => r.id);
@@ -841,10 +849,16 @@ const Browse = ({
 
 	useEffect(() => {
 		const loadData = async () => {
+			// IMDb rows are only fetched by fetchAllData, so treat an enabled IMDb list as
+			// dynamic config. Otherwise enabling one shows nothing until the browse cache expires.
+			const hasEnabledImdbRow = homeRowsConfig.some(
+				(row) => row.enabled && row.id.startsWith('imdb-')
+			);
 			const hasDynamicRowConfig =
 				settings.displayFavoritesRows ||
 				settings.displayCollectionsRows ||
 				settings.displayGenresRows ||
+				hasEnabledImdbRow ||
 				(settings.pluginSections || []).some((section) => section?.enabled);
 
 			if (hasDynamicRowConfig || unifiedMode) {
@@ -883,7 +897,7 @@ const Browse = ({
 
 		const fetchAllData = async () => {
 			try {
-				let libs, resumeItems, nextUp, userConfig, randomItems, recentlyPlayed;
+				let libs, resumeItems, nextUp, userConfig, randomItems, recentlyPlayed, imdbResults = [];
 
 				if (unifiedMode) {
 					const [libsArray, resumeArray, nextUpArray, randomArray] = await Promise.all([
@@ -898,22 +912,54 @@ const Browse = ({
 					userConfig = null; // Not supported in unified mode
 					randomItems = {Items: randomArray};
 					recentlyPlayed = null;
+					// IMDb custom rows are single-server only, so imdbResults stays empty in unified mode.
 				} else {
-					const results = await Promise.all([
-						api.getLibraries(),
-						api.getResumeItems(),
-						api.getNextUp(),
-						api.getUserConfiguration().catch(() => null),
-						api.getRandomItems(settings.featuredContentType, settings.featuredItemCount),
-						settings.mergeContinueWatchingNextUp ? api.getItems({
-							IncludeItemTypes: 'Episode',
-							Filters: 'IsPlayed',
-							Recursive: true,
-							SortBy: 'DatePlayed',
-							SortOrder: 'Descending',
-							Limit: 100,
-							Fields: 'UserData,SeriesId'
-						}) : Promise.resolve(null)
+					const enabledImdbRows = homeRowsConfig.filter(
+						(row) => row.enabled && row.id.startsWith('imdb-')
+					);
+					const [results, imdbListResults] = await Promise.all([
+						Promise.all([
+							api.getLibraries(),
+							api.getResumeItems(),
+							api.getNextUp(),
+							api.getUserConfiguration().catch(() => null),
+							api.getRandomItems(settings.featuredContentType, settings.featuredItemCount),
+							settings.mergeContinueWatchingNextUp ? api.getItems({
+								IncludeItemTypes: 'Episode',
+								Filters: 'IsPlayed',
+								Recursive: true,
+								SortBy: 'DatePlayed',
+								SortOrder: 'Descending',
+								Limit: 100,
+								Fields: 'UserData,SeriesId'
+							}) : Promise.resolve(null)
+						]),
+						Promise.all(
+							enabledImdbRows.map((row) => {
+								const serverId = TV_TO_SERVER_ROW[row.id] || row.id;
+								return api.getCustomRow('imdb', serverId)
+									.then((res) => {
+										if (!res || res.success !== true || !Array.isArray(res.items)) {
+											return { row, items: [] };
+										}
+										// These are external discovery items (no library Id / ImageTags),
+										// so map them to what the media card can render via _externalPosterUrl.
+										const items = res.items.map((it) => {
+											const imdbId = it.providerIds?.Imdb || null;
+											return {
+												Id: `imdb-${imdbId || `${serverId}-${it.rank}`}`,
+												Name: it.name,
+												Type: it.type,
+												ProductionYear: it.productionYear,
+												ProviderIds: {Imdb: imdbId},
+												_externalPosterUrl: it.posterUrl || null
+											};
+										});
+										return { row, items };
+									})
+									.catch(() => ({ row, items: [] }));
+							})
+						)
 					]);
 					libs = results[0].Items || [];
 					resumeItems = results[1];
@@ -921,6 +967,7 @@ const Browse = ({
 					userConfig = results[3];
 					randomItems = results[4];
 					recentlyPlayed = results[5];
+					imdbResults = imdbListResults;
 				}
 
 				cachedLibraries = libs;
@@ -1282,6 +1329,17 @@ const Browse = ({
 					});
 				}
 
+				imdbResults.forEach((res) => {
+					if (res.items?.length > 0) {
+						newRows.push({
+							id: res.row.id,
+							title: $L(res.row.name),
+							items: res.items,
+							type: 'portrait'
+						});
+					}
+				});
+
 				pluginRows.filter(Boolean).forEach((pluginRow) => newRows.push(pluginRow));
 
 				dispatch({type: 'APPEND_ROWS', rows: newRows});
@@ -1322,7 +1380,8 @@ const Browse = ({
 		fetchFreshFeaturedItems,
 		unifiedMode,
 		getItemServerUrl,
-		refreshVolatileData
+		refreshVolatileData,
+		homeRowsConfig
 	]); // eslint-disable-line no-use-before-define
 
 	const targetBackdropUrl = useMemo(() => {
