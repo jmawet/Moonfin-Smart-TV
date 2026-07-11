@@ -1559,7 +1559,9 @@ const Player = ({item, resume, initialMediaSourceId, initialAudioIndex, initialS
 			console.log('[Player] DirectPlay failed, falling back to transcode...');
 			setHasTriedTranscode(true);
 
-			pendingResumeTicksRef.current = 0;
+			// the transcode url has its start time stripped and serves the full
+			// timeline, so keep the position and let the client seek after load
+			pendingResumeTicksRef.current = positionRef.current;
 
 			destroyHlsPlayer();
 			await cleanupVideoElement(videoRef.current);
