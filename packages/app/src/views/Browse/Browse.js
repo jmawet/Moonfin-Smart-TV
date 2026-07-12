@@ -12,6 +12,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import {getImageUrl, getBackdropId, getLogoUrl} from '../../utils/helpers';
 import {getFromStorage, saveToStorage} from '../../services/storage';
 import {HOME_ROW_ITEM_FIELDS} from '../../services/jellyfinApi';
+import {loadSinceYouWatchedRows, loadRewatchItems} from '../../services/homeRecommendations';
 import * as connectionPool from '../../services/connectionPool';
 import {getMoonfinMediaBar} from '../../services/seerrApi';
 import {toCssColor} from '../../theme/themeSpec';
@@ -857,11 +858,17 @@ const Browse = ({
 			const hasEnabledImdbRow = homeRowsConfig.some(
 				(row) => row.enabled && row.id.startsWith('imdb-')
 			);
+			// Recommendation rows are only built by fetchAllData, so treat an enabled one
+			// as dynamic config. Otherwise enabling it shows nothing until the cache expires.
+			const hasEnabledRecommendationRow = homeRowsConfig.some(
+				(row) => row.enabled && (row.id.startsWith('since-you-watched-') || row.id === 'rewatch')
+			);
 			const hasDynamicRowConfig =
 				settings.displayFavoritesRows ||
 				settings.displayCollectionsRows ||
 				settings.displayGenresRows ||
 				hasEnabledImdbRow ||
+				hasEnabledRecommendationRow ||
 				(settings.pluginSections || []).some((section) => section?.enabled);
 
 			if (hasDynamicRowConfig || unifiedMode) {
@@ -1053,6 +1060,8 @@ const Browse = ({
 				let favoriteResults = [];
 				let genresResult = null;
 				let pluginRows = [];
+				let sinceYouWatchedRows = [];
+				let rewatchItems = null;
 
 				const fetchPluginSectionRow = async (section) => {
 					if (!section?.enabled) return null;
@@ -1219,8 +1228,14 @@ const Browse = ({
 					const genresSortOrder = getSortOrderFromSortBy(genresSortBy);
 					const genresIncludeTypes = getGenresIncludeTypes(settings.genresRowItemFilter);
 					const enabledPluginSections = (settings.pluginSections || []).filter((section) => section.enabled);
+					const sinceYouWatchedIndexes = homeRowsConfig
+						.filter((row) => row.enabled && row.id.startsWith('since-you-watched-'))
+						.map((row) => parseInt(row.id.replace('since-you-watched-', ''), 10))
+						.filter((idx) => idx >= 1)
+						.sort((a, b) => a - b);
+					const rewatchEnabled = homeRowsConfig.some((row) => row.enabled && row.id === 'rewatch');
 
-					[latestResults, recentlyReleasedResults, collectionsResult, favoriteResults, genresResult, pluginRows] = await Promise.all([
+					[latestResults, recentlyReleasedResults, collectionsResult, favoriteResults, genresResult, pluginRows, sinceYouWatchedRows, rewatchItems] = await Promise.all([
 						Promise.all(
 							eligibleLibraries.map(lib =>
 								api.getLatest(lib.Id, 16)
@@ -1258,7 +1273,22 @@ const Browse = ({
 						settings.displayGenresRows
 							? api.getGenres(undefined, genresIncludeTypes, genresSortBy, genresSortOrder).catch(() => null)
 							: Promise.resolve(null),
-						Promise.all(enabledPluginSections.map((section) => fetchPluginSectionRow(section)))
+						Promise.all(enabledPluginSections.map((section) => fetchPluginSectionRow(section))),
+						sinceYouWatchedIndexes.length
+							? loadSinceYouWatchedRows(api, {
+								sinceYouWatchedSourceItem: settings.sinceYouWatchedSourceItem,
+								sinceYouWatchedSourceType: settings.sinceYouWatchedSourceType,
+								sinceYouWatchedIncludeWatched: settings.sinceYouWatchedIncludeWatched
+							}, sinceYouWatchedIndexes).catch(() => [])
+							: Promise.resolve([]),
+						rewatchEnabled
+							? loadRewatchItems(api, {
+								rewatchIncludeMovies: settings.rewatchIncludeMovies,
+								rewatchIncludeShows: settings.rewatchIncludeShows,
+								rewatchIncludeCollections: settings.rewatchIncludeCollections,
+								rewatchSortBy: settings.rewatchSortBy
+							}).catch(() => null)
+							: Promise.resolve(null)
 					]);
 				}
 
@@ -1345,6 +1375,24 @@ const Browse = ({
 
 				pluginRows.filter(Boolean).forEach((pluginRow) => newRows.push(pluginRow));
 
+				sinceYouWatchedRows.forEach((row) => {
+					newRows.push({
+						id: row.id,
+						title: $L('Because you watched {name}').replace('{name}', row.seedName),
+						items: row.items,
+						type: 'portrait'
+					});
+				});
+
+				if (rewatchItems && rewatchItems.length > 0) {
+					newRows.push({
+						id: 'rewatch',
+						title: $L('Rewatch'),
+						items: rewatchItems,
+						type: 'portrait'
+					});
+				}
+
 				dispatch({type: 'APPEND_ROWS', rows: newRows});
 				cachedRowData = [...rowData, ...newRows];
 				cacheTimestamp = Date.now();
@@ -1377,6 +1425,13 @@ const Browse = ({
 		settings.uiLanguage,
 		settings.pluginSections,
 		settings.mergeContinueWatchingNextUp,
+		settings.sinceYouWatchedSourceItem,
+		settings.sinceYouWatchedSourceType,
+		settings.sinceYouWatchedIncludeWatched,
+		settings.rewatchIncludeMovies,
+		settings.rewatchIncludeShows,
+		settings.rewatchIncludeCollections,
+		settings.rewatchSortBy,
 		isCacheValid,
 		loadBrowseCache,
 		saveBrowseCache,

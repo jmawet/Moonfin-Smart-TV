@@ -343,6 +343,23 @@ const getGenresRowItemFilterOptions = () => [
 	{ value: 'Series', label: $L('TV Shows') }
 ];
 
+const getSinceYouWatchedSourceItemOptions = () => [
+	{ value: 'recentlyWatched', label: $L('Recently Watched') },
+	{ value: 'favorites', label: $L('Favorites') },
+	{ value: 'random', label: $L('Random') }
+];
+
+const getSinceYouWatchedSourceTypeOptions = () => [
+	{ value: 'movies', label: $L('Movies') },
+	{ value: 'shows', label: $L('TV Shows') },
+	{ value: 'both', label: $L('Movies & TV Shows') }
+];
+
+const getRewatchSortOptions = () => [
+	{ value: 'recentlyWatched', label: $L('Recently Watched') },
+	{ value: 'random', label: $L('Random') }
+];
+
 const getSortOrderFromSortBy = (sortBy) => {
 	if (sortBy === 'SortName') return 'Ascending';
 	if (sortBy === 'Random') return 'Ascending';
@@ -1527,6 +1544,21 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 		<>
 			{renderNavItem('homeRows', $L('Home Sections'), $L('Configure which rows appear on home screen'), openHomeRows, 'list')}
 			{renderNavItem('imdbLists', $L('IMDb Lists'), $L('Choose which IMDb lists are active'), openImdbLists, 'list')}
+			{(settings.homeRows || []).some((row) => row.enabled && row.id.startsWith('since-you-watched-')) && (
+				<>
+					{renderOptionItem('sinceYouWatchedSourceItem', $L('Since You Watched Source'), getSinceYouWatchedSourceItemOptions(), $L('Recently Watched'), 'playcircle')}
+					{renderOptionItem('sinceYouWatchedSourceType', $L('Since You Watched Content'), getSinceYouWatchedSourceTypeOptions(), $L('Movies'), 'movies')}
+					{renderToggleItem('sinceYouWatchedIncludeWatched', $L('Include Watched Titles'), $L('Show titles you have already played in Since You Watched rows'), 'check')}
+				</>
+			)}
+			{(settings.homeRows || []).some((row) => row.enabled && row.id === 'rewatch') && (
+				<>
+					{renderToggleItem('rewatchIncludeMovies', $L('Rewatch Movies'), $L('Include finished movies in the Rewatch row'), 'movies')}
+					{renderToggleItem('rewatchIncludeShows', $L('Rewatch TV Shows'), $L('Include finished shows in the Rewatch row'), 'liveplay')}
+					{renderToggleItem('rewatchIncludeCollections', $L('Rewatch Collections'), $L('Include finished collections in the Rewatch row'), 'bookmark')}
+					{renderOptionItem('rewatchSortBy', $L('Rewatch Sorting'), getRewatchSortOptions(), $L('Recently Watched'), 'arrowupdown')}
+				</>
+			)}
 			{seerr.isEnabled && renderToggleItem(
 				'displaySeerrRows',
 				$L('Display Seerr Discovery Rows'),
