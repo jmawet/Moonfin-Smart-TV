@@ -46,7 +46,7 @@ const yearOf = (item) => {
 	return Number.isFinite(year) ? year : undefined;
 };
 
-const normalizeMediaItem = (item) => {
+export const normalizeMediaItem = (item) => {
 	const mediaType = item.media_type || item.mediaType || (item.title ? 'movie' : 'tv');
 	const poster = item.poster_path || item.posterPath;
 	return {

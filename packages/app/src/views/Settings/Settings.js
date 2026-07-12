@@ -342,6 +342,11 @@ const getGenresRowItemFilterOptions = () => [
 	{ value: 'Series', label: $L('TV Shows') }
 ];
 
+const getSinceYouWatchedSourceOptions = () => [
+	{ value: 'local', label: $L('Local') },
+	{ value: 'online', label: $L('Online') }
+];
+
 const getSinceYouWatchedSourceItemOptions = () => [
 	{ value: 'recentlyWatched', label: $L('Recently Watched') },
 	{ value: 'favorites', label: $L('Favorites') },
@@ -1563,7 +1568,8 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 			)}
 			{(settings.homeRows || []).some((row) => row.enabled && row.id.startsWith('since-you-watched-')) && (
 				<>
-					{renderOptionItem('sinceYouWatchedSourceItem', $L('Since You Watched Source'), getSinceYouWatchedSourceItemOptions(), $L('Recently Watched'), 'playcircle')}
+					{renderOptionItem('sinceYouWatchedSource', $L('Since You Watched Source'), getSinceYouWatchedSourceOptions(), $L('Local'), 'browser')}
+					{renderOptionItem('sinceYouWatchedSourceItem', $L('Since You Watched Seed'), getSinceYouWatchedSourceItemOptions(), $L('Recently Watched'), 'playcircle')}
 					{renderOptionItem('sinceYouWatchedSourceType', $L('Since You Watched Content'), getSinceYouWatchedSourceTypeOptions(), $L('Movies'), 'movies')}
 					{renderToggleItem('sinceYouWatchedIncludeWatched', $L('Include Watched Titles'), $L('Show titles you have already played in Since You Watched rows'), 'check')}
 				</>

@@ -1276,10 +1276,12 @@ const Browse = ({
 						Promise.all(enabledPluginSections.map((section) => fetchPluginSectionRow(section))),
 						sinceYouWatchedIndexes.length
 							? loadSinceYouWatchedRows(api, {
+								sinceYouWatchedSource: settings.sinceYouWatchedSource,
 								sinceYouWatchedSourceItem: settings.sinceYouWatchedSourceItem,
 								sinceYouWatchedSourceType: settings.sinceYouWatchedSourceType,
-								sinceYouWatchedIncludeWatched: settings.sinceYouWatchedIncludeWatched
-							}, sinceYouWatchedIndexes).catch(() => [])
+								sinceYouWatchedIncludeWatched: settings.sinceYouWatchedIncludeWatched,
+								tmdbApiKey: settings.tmdbApiKey
+							}, sinceYouWatchedIndexes, seerrEnabled && seerrAuthenticated).catch(() => [])
 							: Promise.resolve([]),
 						rewatchEnabled
 							? loadRewatchItems(api, {
@@ -1380,7 +1382,8 @@ const Browse = ({
 						id: row.id,
 						title: $L('Because you watched {name}').replace('{name}', row.seedName),
 						items: row.items,
-						type: 'portrait'
+						type: 'portrait',
+						isOnlineRecoRow: row.isSeerr === true
 					});
 				});
 
@@ -1425,9 +1428,13 @@ const Browse = ({
 		settings.uiLanguage,
 		settings.pluginSections,
 		settings.mergeContinueWatchingNextUp,
+		settings.sinceYouWatchedSource,
 		settings.sinceYouWatchedSourceItem,
 		settings.sinceYouWatchedSourceType,
 		settings.sinceYouWatchedIncludeWatched,
+		settings.tmdbApiKey,
+		seerrEnabled,
+		seerrAuthenticated,
 		settings.rewatchIncludeMovies,
 		settings.rewatchIncludeShows,
 		settings.rewatchIncludeCollections,
@@ -1688,7 +1695,7 @@ const Browse = ({
 							);
 						}
 						let selectHandler = handleSelectItem;
-						if (row.isSeerrRow) selectHandler = handleSelectSeerrItem;
+						if (row.isSeerrRow || row.isOnlineRecoRow) selectHandler = handleSelectSeerrItem;
 						else if (row.isGenreRow) selectHandler = handleSelectGenreItem;
 						return (
 							<RowComponent

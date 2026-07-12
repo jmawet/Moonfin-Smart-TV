@@ -113,9 +113,12 @@ const defaultSettings = {
 	imdbMostPopularTvShowsEnabled: false,
 	imdbLowestRatedMoviesEnabled: false,
 	imdbTopEnglishMoviesEnabled: false,
+	sinceYouWatchedSource: 'local',
 	sinceYouWatchedSourceItem: 'recentlyWatched',
 	sinceYouWatchedSourceType: 'movies',
 	sinceYouWatchedIncludeWatched: false,
+	// Pulled from the server plugin, never pushed back. Empty until synced.
+	tmdbApiKey: '',
 	rewatchIncludeMovies: true,
 	rewatchIncludeShows: true,
 	rewatchIncludeCollections: true,
@@ -336,7 +339,7 @@ const SYNCABLE_KEYS = [
 	'mdblistEnabled', 'mdblistRatingSources', 'tmdbEpisodeRatingsEnabled',
 	'imdbTop250MoviesEnabled', 'imdbTop250TvShowsEnabled', 'imdbMostPopularMoviesEnabled',
 	'imdbMostPopularTvShowsEnabled', 'imdbLowestRatedMoviesEnabled', 'imdbTopEnglishMoviesEnabled',
-	'sinceYouWatchedSourceItem', 'sinceYouWatchedSourceType', 'sinceYouWatchedIncludeWatched',
+	'sinceYouWatchedSource', 'sinceYouWatchedSourceItem', 'sinceYouWatchedSourceType', 'sinceYouWatchedIncludeWatched',
 	'rewatchIncludeMovies', 'rewatchIncludeShows', 'rewatchIncludeCollections', 'rewatchSortBy',
 	'navbarPosition', 'featuredBarStyle', 'featuredContentType', 'featuredItemCount',
 	'featuredTrailerPreview', 'featuredTrailerMuted', 'unifiedLibraryMode', 'seasonalTheme',
@@ -378,6 +381,11 @@ const profileToLocal = (serverProfile) => {
 			local[localKey] = conv?.fromServer ? conv.fromServer(value) : value;
 		}
 	}
+	// The TMDB key is read only. We pull it so online rows can call TMDB, but it
+	// stays out of SYNCABLE_KEYS so the client never pushes it back.
+	if (serverProfile.tmdbApiKey !== undefined && serverProfile.tmdbApiKey !== null) {
+		local.tmdbApiKey = serverProfile.tmdbApiKey;
+	}
 	return local;
 };
 
@@ -408,6 +416,8 @@ const resolveFromEnvelope = (envelope, adminDefaults) => {
 			resolved[key] = adminProfile[key];
 		}
 	}
+	const tmdbKey = tvProfile.tmdbApiKey ?? globalProfile.tmdbApiKey ?? adminProfile.tmdbApiKey;
+	if (tmdbKey !== undefined) resolved.tmdbApiKey = tmdbKey;
 	return resolved;
 };
 
@@ -667,7 +677,7 @@ export function SettingsProvider({children}) {
 
 			const resolved = resolveFromEnvelope(serverData, adminDefaults);
 
-			const hasServerValues = SYNCABLE_KEYS.some(key => resolved[key] !== undefined);
+			const hasServerValues = resolved.tmdbApiKey !== undefined || SYNCABLE_KEYS.some(key => resolved[key] !== undefined);
 			if (!hasServerValues) return;
 
 			setSettings(prev => {
@@ -675,6 +685,7 @@ export function SettingsProvider({children}) {
 				for (const key of SYNCABLE_KEYS) {
 					if (resolved[key] !== undefined) updated[key] = resolved[key];
 				}
+				if (resolved.tmdbApiKey !== undefined) updated.tmdbApiKey = resolved.tmdbApiKey;
 				updated.homeRowsStyle = normalizeHomeRowsStyle(updated.homeRowsStyle);
 				if (updated.customThemeId && !getAvailableThemes()[updated.customThemeId]) {
 					updated.customThemeId = '';

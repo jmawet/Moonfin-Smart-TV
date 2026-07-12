@@ -1,4 +1,6 @@
 import {HOME_ROW_ITEM_FIELDS} from './jellyfinApi';
+import seerrApi from './seerrApi';
+import {normalizeMediaItem} from '../utils/seerrHomeRows';
 
 // Fields needed to score candidates without extra detail calls.
 const CANDIDATE_FIELDS = 'Genres,Tags,People,UserData,OfficialRating,ProductionYear,CommunityRating,Studios';
@@ -340,13 +342,14 @@ async function loadSeeds(api, sourceItem, sourceType) {
 
 // Builds one row per enabled index. Row N is seeded from the Nth item in the
 // shared seed pool, so seeds are only fetched once.
-export async function loadSinceYouWatchedRows(api, settings, enabledIndexes) {
+export async function loadSinceYouWatchedRows(api, settings, enabledIndexes, onlineAllowed) {
 	if (!enabledIndexes || enabledIndexes.length === 0) return [];
 
 	const sourceItem = settings.sinceYouWatchedSourceItem || 'recentlyWatched';
 	const sourceType = settings.sinceYouWatchedSourceType || 'movies';
 	const includeWatched = settings.sinceYouWatchedIncludeWatched === true;
 	const candidateItemTypes = candidateTypesFor(sourceType);
+	const online = settings.sinceYouWatchedSource === 'online' && onlineAllowed;
 
 	const seeds = await loadSeeds(api, sourceItem, sourceType);
 	if (seeds.length === 0) return [];
@@ -355,6 +358,19 @@ export async function loadSinceYouWatchedRows(api, settings, enabledIndexes) {
 		enabledIndexes.map(async (idx) => {
 			const seed = seeds[idx - 1];
 			if (!seed) return null;
+
+			if (online) {
+				const onlineItems = await getOnlineRecommendations(settings, seed).catch(() => []);
+				if (onlineItems.length) {
+					return {
+						id: `since-you-watched-${idx}`,
+						seedName: seed.Name || '',
+						items: onlineItems,
+						isSeerr: true
+					};
+				}
+			}
+
 			const items = await getRecommendations(api, seed, {
 				includeWatched,
 				candidateItemTypes,
@@ -369,6 +385,49 @@ export async function loadSinceYouWatchedRows(api, settings, enabledIndexes) {
 		})
 	);
 	return rows.filter(Boolean);
+}
+
+// Online recommendations come from TMDB using the plugin synced key, falling back
+// to the Seerr proxy. Results are normalized to the external card shape.
+async function fetchTmdbRecommendations(tmdbApiKey, tmdbId, mediaType) {
+	if (!tmdbApiKey) return [];
+	try {
+		let url = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}/recommendations?language=en-US&page=1`;
+		const options = {};
+		if (tmdbApiKey.startsWith('eyJ')) {
+			options.headers = {Authorization: `Bearer ${tmdbApiKey}`};
+		} else {
+			url += `&api_key=${encodeURIComponent(tmdbApiKey)}`;
+		}
+		const res = await fetch(url, options);
+		if (!res.ok) return [];
+		const data = await res.json();
+		return Array.isArray(data && data.results) ? data.results : [];
+	} catch (_error) {
+		return [];
+	}
+}
+
+async function fetchSeerrRecommendations(tmdbId, mediaType) {
+	try {
+		const res = mediaType === 'tv'
+			? await seerrApi.getTvRecommendations(tmdbId)
+			: await seerrApi.getMovieRecommendations(tmdbId);
+		return Array.isArray(res && res.results) ? res.results : [];
+	} catch (_error) {
+		return [];
+	}
+}
+
+async function getOnlineRecommendations(settings, seed) {
+	const tmdbId = seed.ProviderIds && seed.ProviderIds.Tmdb;
+	if (!tmdbId) return [];
+	const mediaType = seed.Type === 'Series' ? 'tv' : 'movie';
+
+	let results = await fetchTmdbRecommendations(settings.tmdbApiKey, String(tmdbId), mediaType);
+	if (!results.length) results = await fetchSeerrRecommendations(String(tmdbId), mediaType);
+
+	return results.filter((item) => item && item.id).slice(0, 15).map(normalizeMediaItem);
 }
 
 // A series counts as fully watched only when nothing is left unplayed.
