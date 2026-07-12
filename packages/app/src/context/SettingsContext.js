@@ -25,7 +25,13 @@ const DEFAULT_HOME_ROWS = [
 	{id: 'imdb-popular-movies', name: 'IMDb Most Popular Movies', enabled: false, order: 17},
 	{id: 'imdb-popular-tv', name: 'IMDb Most Popular TV Shows', enabled: false, order: 18},
 	{id: 'imdb-lowest-rated', name: 'IMDb Lowest Rated Movies', enabled: false, order: 19},
-	{id: 'imdb-top-english', name: 'IMDb Top Rated English Movies', enabled: false, order: 20}
+	{id: 'imdb-top-english', name: 'IMDb Top Rated English Movies', enabled: false, order: 20},
+	{id: 'since-you-watched-1', name: 'Since You Watched Row 1', enabled: false, order: 21},
+	{id: 'since-you-watched-2', name: 'Since You Watched Row 2', enabled: false, order: 22},
+	{id: 'since-you-watched-3', name: 'Since You Watched Row 3', enabled: false, order: 23},
+	{id: 'since-you-watched-4', name: 'Since You Watched Row 4', enabled: false, order: 24},
+	{id: 'since-you-watched-5', name: 'Since You Watched Row 5', enabled: false, order: 25},
+	{id: 'rewatch', name: 'Rewatch', enabled: false, order: 26}
 ];
 
 const DEFAULT_SEERR_HOME_ROWS = [
@@ -107,6 +113,13 @@ const defaultSettings = {
 	imdbMostPopularTvShowsEnabled: false,
 	imdbLowestRatedMoviesEnabled: false,
 	imdbTopEnglishMoviesEnabled: false,
+	sinceYouWatchedSourceItem: 'recentlyWatched',
+	sinceYouWatchedSourceType: 'movies',
+	sinceYouWatchedIncludeWatched: false,
+	rewatchIncludeMovies: true,
+	rewatchIncludeShows: true,
+	rewatchIncludeCollections: true,
+	rewatchSortBy: 'recentlyWatched',
 	showClock: true,
 	clockDisplay: '24-hour',
 	autoLogin: true,
@@ -323,6 +336,8 @@ const SYNCABLE_KEYS = [
 	'mdblistEnabled', 'mdblistRatingSources', 'tmdbEpisodeRatingsEnabled',
 	'imdbTop250MoviesEnabled', 'imdbTop250TvShowsEnabled', 'imdbMostPopularMoviesEnabled',
 	'imdbMostPopularTvShowsEnabled', 'imdbLowestRatedMoviesEnabled', 'imdbTopEnglishMoviesEnabled',
+	'sinceYouWatchedSourceItem', 'sinceYouWatchedSourceType', 'sinceYouWatchedIncludeWatched',
+	'rewatchIncludeMovies', 'rewatchIncludeShows', 'rewatchIncludeCollections', 'rewatchSortBy',
 	'navbarPosition', 'featuredBarStyle', 'featuredContentType', 'featuredItemCount',
 	'featuredTrailerPreview', 'featuredTrailerMuted', 'unifiedLibraryMode', 'seasonalTheme',
 	'visualTheme', 'customThemeId',
