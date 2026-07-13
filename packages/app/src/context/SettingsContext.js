@@ -144,6 +144,8 @@ const defaultSettings = {
 	homeRowsPosterSize: 'default',
 	homeRowsImageType: 'poster',
 	homeRowsStyle: 'v2',
+	detailScreenStyle: 'v2',
+	detailExpandedTabs: true,
 	homeRowOverlay: 'off',
 	folderViewMode: 'local',
 	excludedGenres: [],
@@ -283,6 +285,12 @@ const normalizeHomeRowsStyle = (value) => {
 	return value === 'v1' || value === 'v2' ? value : 'v2';
 };
 
+const normalizeDetailScreenStyle = (value) => {
+	if (value === 'classic') return 'v1';
+	if (value === 'modern') return 'v2';
+	return value === 'v1' || value === 'v2' ? value : 'v2';
+};
+
 const normalizeGuid = (id) => {
 	if (!id || typeof id !== 'string') return id;
 	const raw = id.replace(/-/g, '');
@@ -356,7 +364,7 @@ const SYNCABLE_KEYS = [
 	'stillWatchingPrompt', 'watchedIndicatorBehavior',
 	'backdropBlurHome', 'backdropBlurDetail',
 	'mediaBarSourceType', 'mediaBarLibraryIds', 'mediaBarCollectionIds',
-	'homeRows', 'homeRowsStyle', 'fullScreenRows', 'homeRowsPosterSize', 'useSeriesThumbnails',
+	'homeRows', 'homeRowsStyle', 'detailScreenStyle', 'detailExpandedTabs', 'fullScreenRows', 'homeRowsPosterSize', 'useSeriesThumbnails',
 	'useDetailedSubHeadings',
 	'syncplayEnabled', 'syncplayAutoOpen',
 	'showSyncPlayButton',
@@ -477,6 +485,13 @@ export function SettingsProvider({children}) {
 					const normalizedStyle = normalizeHomeRowsStyle(stored.homeRowsStyle);
 					if (normalizedStyle !== stored.homeRowsStyle) {
 						stored.homeRowsStyle = normalizedStyle;
+						migrated = true;
+					}
+				}
+				if (stored.detailScreenStyle !== undefined) {
+					const normalizedDetailStyle = normalizeDetailScreenStyle(stored.detailScreenStyle);
+					if (normalizedDetailStyle !== stored.detailScreenStyle) {
+						stored.detailScreenStyle = normalizedDetailStyle;
 						migrated = true;
 					}
 				}
@@ -687,6 +702,7 @@ export function SettingsProvider({children}) {
 				}
 				if (resolved.tmdbApiKey !== undefined) updated.tmdbApiKey = resolved.tmdbApiKey;
 				updated.homeRowsStyle = normalizeHomeRowsStyle(updated.homeRowsStyle);
+				updated.detailScreenStyle = normalizeDetailScreenStyle(updated.detailScreenStyle);
 				if (updated.customThemeId && !getAvailableThemes()[updated.customThemeId]) {
 					updated.customThemeId = '';
 				}

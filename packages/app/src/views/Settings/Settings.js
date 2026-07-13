@@ -325,6 +325,11 @@ const getHomeRowsStyleOptions = () => [
 	{ value: 'v1', label: $L('Classic') }
 ];
 
+const getDetailScreenStyleOptions = () => [
+	{ value: 'v2', label: $L('Modern') },
+	{ value: 'v1', label: $L('Classic') }
+];
+
 const getHomeRowSortOptions = () => [
 	{ value: 'SortName', label: $L('Name') },
 	{ value: 'DateCreated', label: $L('Date Added') },
@@ -1525,7 +1530,11 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 
 	const renderPersonalizationDetailsScreen = () => (
 		<>
-			{renderOptionItem('backdropBlurDetail', $L('Details Background Blur'), getBlurOptions(), $L('Medium'))}
+			{renderOptionItem('detailScreenStyle', $L('Detail Screen Style'), getDetailScreenStyleOptions(), $L('Modern'), 'appscontents')}
+			{settings.detailScreenStyle === 'v1' &&
+				renderOptionItem('backdropBlurDetail', $L('Details Background Blur'), getBlurOptions(), $L('Medium'))}
+			{settings.detailScreenStyle !== 'v1' &&
+				renderToggleItem('detailExpandedTabs', $L('Expanded Tabs'), $L('Keep detail tabs expanded and follow focus'), 'appscontents')}
 		</>
 	)
 

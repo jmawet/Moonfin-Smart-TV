@@ -205,7 +205,7 @@ export const api = {
 	getLocalTrailers: (itemId) => request(`/Users/${currentUser}/Items/${itemId}/LocalTrailers`),
 
 	getItemForDetail: (itemId) =>
-		request(`/Users/${currentUser}/Items/${itemId}?Fields=Overview,Genres,OfficialRating,BackdropImageTags,ParentBackdropImageTags,ParentBackdropItemId,ProviderIds,RunTimeTicks,ProductionYear,Chapters`),
+		request(`/Users/${currentUser}/Items/${itemId}?Fields=Overview,Genres,OfficialRating,BackdropImageTags,ParentBackdropImageTags,ParentBackdropItemId,ProviderIds,RunTimeTicks,ProductionYear,Chapters,People,Studios,Taglines,RemoteTrailers,MediaSources,MediaSourceCount,CommunityRating,CriticRating`),
 
 	getItemWithChapters: (itemId) => request(`/Users/${currentUser}/Items/${itemId}?Fields=Chapters`),
 
@@ -292,7 +292,7 @@ export const api = {
 	getEpisodes: (seriesId, seasonId) =>
 		request(`/Shows/${seriesId}/Episodes?UserId=${currentUser}&SeasonId=${seasonId}&Fields=PrimaryImageAspectRatio,Overview`),
 
-	getSimilar: (itemId, limit = 12) =>
+	getSimilar: (itemId, limit = 15) =>
 		request(`/Items/${itemId}/Similar?UserId=${currentUser}&Limit=${limit}&Fields=PrimaryImageAspectRatio,ProductionYear`),
 
 	getGenres: (libraryId, includeItemTypes = 'Movie,Series', sortBy = 'SortName', sortOrder = 'Ascending') => {
@@ -305,6 +305,9 @@ export const api = {
 		const params = encodeURIComponent(JSON.stringify({source: String(source), type: String(type)}));
 		return request(`/Moonfin/CustomRows/Items?source=${encodeURIComponent(String(source))}&type=${encodeURIComponent(String(type))}&params=${params}`);
 	},
+
+	getStudioCompanies: (tmdbId, mediaType) =>
+		request(`/Moonfin/Tmdb/ProductionCompanies?tmdbId=${encodeURIComponent(tmdbId)}&type=${mediaType === 'tv' ? 'tv' : 'movie'}`),
 
 	getMusicGenres: (params = {}) => {
 		const merged = {UserId: currentUser, SortBy: 'SortName', SortOrder: 'Ascending', Recursive: 'true'};
@@ -646,6 +649,9 @@ export const createApiForServer = (serverUrl, token, userId, serverTypeOverride 
 			const params = encodeURIComponent(JSON.stringify({source: String(source), type: String(type)}));
 			return serverRequest(`/Moonfin/CustomRows/Items?source=${encodeURIComponent(String(source))}&type=${encodeURIComponent(String(type))}&params=${params}`);
 		},
+
+		getStudioCompanies: (tmdbId, mediaType) =>
+			serverRequest(`/Moonfin/Tmdb/ProductionCompanies?tmdbId=${encodeURIComponent(tmdbId)}&type=${mediaType === 'tv' ? 'tv' : 'movie'}`),
 
 		searchRemoteSubtitles: (itemId, language = 'eng', isPerfectMatch = null) => {
 			const query = isPerfectMatch === null ? '' : `?IsPerfectMatch=${isPerfectMatch}`;

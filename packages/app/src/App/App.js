@@ -145,6 +145,7 @@ const AppContent = (props) => {
 	const [selectedPerson, setSelectedPerson] = useState(null);
 	const [selectedGenre, setSelectedGenre] = useState(null);
 	const [genreFilter, setGenreFilter] = useState(null);
+	const [studioFilter, setStudioFilter] = useState(null);
 	const [playingItem, setPlayingItem] = useState(null);
 	const [playbackOptions, setPlaybackOptions] = useState(null);
 	const [isResume, setIsResume] = useState(false);
@@ -639,8 +640,17 @@ const AppContent = (props) => {
 		}
 		setSelectedLibrary(library);
 		setGenreFilter(null);
+		setStudioFilter(null);
 		navigateTo(PANELS.LIBRARY);
 	}, [api, navigateTo, settings.liveTvDirect]);
+
+	const handleSelectStudio = useCallback((studioName) => {
+		if (!studioName) return;
+		setStudioFilter(studioName);
+		setGenreFilter(null);
+		setSelectedLibrary(null);
+		navigateTo(PANELS.LIBRARY);
+	}, [navigateTo]);
 
 	const handleSelectGame = useCallback((gameLibrary, game) => {
 		setSelectedGameLibrary(gameLibrary);
@@ -745,6 +755,7 @@ const AppContent = (props) => {
 
 	const handleSelectGenre = useCallback((genre, library) => {
 		setGenreFilter(genre.name);
+		setStudioFilter(null);
 		if (library) {
 			setSelectedLibrary(library);
 		} else if (genre._serverUrl) {
@@ -814,6 +825,7 @@ const AppContent = (props) => {
 		setSelectedPerson(null);
 		setSelectedGenre(null);
 		setGenreFilter(null);
+		setStudioFilter(null);
 		setSeerrItem(null);
 		setSeerrBrowse(null);
 		setSeerrPerson(null);
@@ -1053,6 +1065,7 @@ const AppContent = (props) => {
 								onPlay={handlePlay}
 								onSelectItem={handleSelectItem}
 								onSelectPerson={handleSelectPerson}
+								onSelectStudio={handleSelectStudio}
 								onItemDeleted={handleBack}
 							backHandlerRef={backHandlerRef}
 						/>
@@ -1063,6 +1076,7 @@ const AppContent = (props) => {
 							<Library
 							library={selectedLibrary}
 							genreFilter={genreFilter}
+							studioFilter={studioFilter}
 							onSelectItem={handleSelectItem}
 							onViewPhoto={handleViewPhoto}
 							onHome={handleHome}

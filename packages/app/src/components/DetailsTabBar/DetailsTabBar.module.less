@@ -1,0 +1,35 @@
+.tabBar {
+	display: inline-flex;
+	flex-direction: row;
+	flex-wrap: nowrap;
+	gap: 6px;
+	align-items: center;
+	padding: 8px;
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.08);
+}
+
+.tab {
+	padding: 12px 32px;
+	border-radius: 999px;
+	background: transparent;
+	color: rgba(255, 255, 255, 0.7);
+	font-size: 24px;
+	font-weight: 600;
+	line-height: 1.2;
+	white-space: nowrap;
+	cursor: pointer;
+	outline: none;
+	transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.tabActive {
+	background: rgba(255, 255, 255, 0.18);
+	color: #fff;
+}
+
+.tab:focus {
+	background: #fff;
+	color: #101114;
+	transform: scale(1.05);
+}

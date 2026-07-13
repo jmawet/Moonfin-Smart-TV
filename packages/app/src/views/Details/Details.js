@@ -12,6 +12,7 @@ import * as jellyfinApi from '../../services/jellyfinApi';
 import MediaRow from '../../components/MediaRow';
 import MediaCard from '../../components/MediaCard';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import ModernDetailContent from './ModernDetailContent';
 import RatingsRow from '../../components/RatingsRow';
 import {formatDuration, getImageUrl, getBackdropId, getLogoUrl} from '../../utils/helpers';
 import {KEYS, isBackKey} from '../../utils/keys';
@@ -130,7 +131,7 @@ const getMediaBadges = (item, versionIndex = 0) => {
 	return badges;
 };
 
-const Details = ({itemId, initialItem, onPlay, onSelectItem, onSelectPerson, onItemDeleted, backHandlerRef}) => {
+const Details = ({itemId, initialItem, onPlay, onSelectItem, onSelectPerson, onSelectStudio, onItemDeleted, backHandlerRef}) => {
 	const {api, serverUrl} = useAuth();
 	const {settings} = useSettings();
 
@@ -1451,6 +1452,265 @@ const handleSectionKeyDown = useCallback((ev) => {
 		);
 	};
 
+	const trailerOverlayContent = trailerOverlay && (
+		<div className={css.trailerOverlay} onClick={handleCloseTrailer} onKeyDown={handleTrailerOverlayKeyDown}>
+			<SpottableButton className={css.trailerCloseBtn} onClick={handleCloseTrailer} spotlightId="trailer-close-btn">
+				<svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
+					<path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+				</svg>
+			</SpottableButton>
+			<div className={css.trailerIframeWrap} onClick={handleStopPropagation}>
+				{trailerStreamUrl ? (
+					<video
+						ref={trailerVideoRef}
+						className={css.trailerIframe}
+						src={trailerStreamUrl}
+						autoPlay
+						controls
+						playsInline
+						muted={settings.featuredTrailerMuted}
+					/>
+				) : (
+					<div className={css.trailerLoading}>
+						{$L('Loading trailer...')}
+					</div>
+				)}
+			</div>
+		</div>
+	);
+
+	const trailerOverlayLayer = trailerOverlayContent
+		? (typeof document !== 'undefined' && document.body
+			? createPortal(trailerOverlayContent, document.body)
+			: trailerOverlayContent)
+		: null;
+
+	const renderModals = () => (
+		<>
+			{activeModal === 'version' && (
+				<div className={css.trackModal} onClick={closeModal}>
+					<ModalContainer className={css.trackModalPanel} onClick={handleStopPropagation} data-modal="version" spotlightId="version-modal">
+						<h2 className={css.trackModalTitle}>{$L('Select Version')}</h2>
+						<div className={css.trackList}>
+							{item.MediaSources.map((source, i) => {
+								const video = source.MediaStreams?.find(s => s.Type === 'Video');
+								const resLabel = video?.Width >= 3800 ? '4K' : video?.Width >= 1900 ? '1080p' : video?.Width >= 1260 ? '720p' : video?.Width ? `${video.Width}p` : '';
+								const bitrate = source.Bitrate ? `${(source.Bitrate / 1000000).toFixed(1)} Mbps` : '';
+								const container = source.Container?.toUpperCase();
+								const detail = [resLabel, container, bitrate].filter(Boolean).join(' · ');
+								return (
+									<SpottableButton
+										key={source.Id}
+										className={`${css.trackItem} ${i === selectedVersionIndex ? css.selected : ''}`}
+										data-index={i}
+										data-selected={i === selectedVersionIndex ? 'true' : undefined}
+										onClick={handleSelectVersion}
+									>
+										<span className={css.trackName}>{source.Name || `${$L('Version')} ${i + 1}`}</span>
+										{detail && <span className={css.trackInfo}>{detail}</span>}
+									</SpottableButton>
+								);
+							})}
+						</div>
+						<p className={css.trackModalFooter}>{$L('Press BACK to close')}</p>
+					</ModalContainer>
+				</div>
+			)}
+			{activeModal === 'audio' && (
+				<div className={css.trackModal} onClick={closeModal}>
+					<ModalContainer className={css.trackModalPanel} onClick={handleStopPropagation} data-modal="audio" spotlightId="audio-modal">
+						<h2 className={css.trackModalTitle}>{$L('Select Audio Track')}</h2>
+						<div className={css.trackList}>
+							{audioStreams.map((stream, i) => (
+								<SpottableButton
+									key={stream.Index}
+									className={`${css.trackItem} ${i === selectedAudioIndex ? css.selected : ''}`}
+									data-index={i}
+									data-selected={i === selectedAudioIndex ? 'true' : undefined}
+									onClick={handleSelectAudio}
+								>
+									<span className={css.trackName}>{stream.DisplayTitle || stream.Language || `${$L('Track')} ${i + 1}`}</span>
+									{stream.Channels && <span className={css.trackInfo}>{stream.Channels}ch</span>}
+								</SpottableButton>
+							))}
+						</div>
+						<p className={css.trackModalFooter}>{$L('Press BACK to close')}</p>
+					</ModalContainer>
+				</div>
+			)}
+			{activeModal === 'subtitle' && (
+				<div className={css.trackModal} onClick={closeModal}>
+					<ModalContainer className={css.trackModalPanel} onClick={handleStopPropagation} data-modal="subtitle" spotlightId="subtitle-modal">
+						<h2 className={css.trackModalTitle}>{$L('Select Subtitle')}</h2>
+						<div className={css.trackList}>
+							<SpottableButton
+								className={`${css.trackItem} ${selectedSubtitleIndex === -1 ? css.selected : ''}`}
+								data-index={-1}
+								data-selected={selectedSubtitleIndex === -1 ? 'true' : undefined}
+								onClick={handleSelectSubtitle}
+							>
+								<span className={css.trackName}>{$L('Off')}</span>
+							</SpottableButton>
+							{subtitleStreams.map((stream, i) => (
+								<SpottableButton
+									key={stream.Index}
+									className={`${css.trackItem} ${i === selectedSubtitleIndex ? css.selected : ''}`}
+									data-index={i}
+									data-selected={i === selectedSubtitleIndex ? 'true' : undefined}
+									onClick={handleSelectSubtitle}
+								>
+									<span className={css.trackName}>{stream.DisplayTitle || stream.Language || `${$L('Track')} ${i + 1}`}</span>
+									{stream.IsForced && <span className={css.trackInfo}>{$L('Forced')}</span>}
+								</SpottableButton>
+							))}
+						</div>
+						<p className={css.trackModalFooter}>
+							<SpottableButton spotlightId="btn-subtitle-download" className={css.actionBtn} onClick={handleOpenRemoteSubtitleSearch}>
+								{$L('Download')}
+							</SpottableButton>
+						</p>
+						<p className={css.trackModalFooter} style={{marginTop: 5, fontSize: 14, opacity: 0.5}}>{$L('Press BACK to close')}</p>
+					</ModalContainer>
+				</div>
+			)}
+			{activeModal === 'subtitleDownload' && (
+				<div className={css.trackModal} onClick={closeModal}>
+					<ModalContainer className={css.trackModalPanel} onClick={handleStopPropagation} data-modal="subtitleDownload" spotlightId="subtitleDownload-modal">
+						<h2 className={css.trackModalTitle}>{$L('Download Subtitles')}</h2>
+						<div className={css.trackList}>
+							{isSearchingRemoteSubtitles && (
+								<SpottableDiv className={css.trackItem}>
+									<span className={css.trackName}>{$L('Searching...')}</span>
+								</SpottableDiv>
+							)}
+							{!isSearchingRemoteSubtitles && remoteSubtitleResults.length === 0 && (
+								<SpottableDiv className={css.trackItem}>
+									<span className={css.trackName}>{$L('No remote subtitles found')}</span>
+								</SpottableDiv>
+							)}
+							{!isSearchingRemoteSubtitles && remoteSubtitleResults.map((subtitle, idx) => (
+								<SpottableButton
+									key={subtitle.id || idx}
+									className={css.trackItem}
+									data-index={idx}
+									onClick={handleSelectRemoteSubtitle}
+									style={{flexDirection: 'column', alignItems: 'flex-start'}}
+								>
+									<span className={css.trackName}>{subtitle.name || $L('Subtitle')}</span>
+									{subtitle.info && <span className={css.trackInfo} style={{marginTop: 4}}>{subtitle.info}</span>}
+								</SpottableButton>
+							))}
+						</div>
+						<p className={css.trackModalFooter}>{$L('Press BACK to close')}</p>
+					</ModalContainer>
+				</div>
+			)}
+
+			{renderMediaInfoModal()}
+
+			{trailerOverlayLayer}
+
+			<AddToPlaylistModal
+				open={showPlaylistModal}
+				itemId={item?.Id}
+				api={effectiveApi}
+				onClose={handleClosePlaylistModal}
+				onSuccess={showToast}
+			/>
+
+			<DeleteItemDialog
+				open={showDeleteDialog}
+				itemName={item?.Name}
+				onCancel={handleCloseDeleteDialog}
+				onConfirm={handleConfirmDelete}
+			/>
+
+			{toastMessage && (
+				<div className={css.toast} onAnimationEnd={handleToastEnd}>{toastMessage}</div>
+			)}
+		</>
+	);
+
+	// === MODERN DETAIL RENDER (all item types) ===
+
+	if (settings.detailScreenStyle !== 'v1') {
+		return (
+			<div className={css.page}>
+				<ModernDetailContent
+					key={item.Id}
+					item={item}
+					settings={settings}
+					effectiveApi={effectiveApi}
+					serverToken={initialItem?._serverAccessToken || jellyfinApi.getApiKey()}
+					effectiveServerUrl={effectiveServerUrl}
+					isEpisode={isEpisode}
+					isSeries={isSeries}
+					isSeason={isSeason}
+					isPerson={isPerson}
+					isBoxSet={isBoxSet}
+					isAlbum={isAlbum}
+					isMusicArtist={isMusicArtist}
+					isPlaylist={isPlaylist}
+					isBook={isBook}
+					isReadableBook={isReadableBook}
+					backdropUrl={backdropUrl}
+					posterUrl={posterUrl}
+					logoUrl={logoUrl}
+					invertLogo={invertLogo}
+					onLogoError={handleLogoError}
+					year={year}
+					runtime={runtime}
+					endsAt={endsAt}
+					officialRating={officialRating}
+					seasonCount={seasonCount}
+					genres={genres}
+					tagline={tagline}
+					hasPlaybackPosition={hasPlaybackPosition}
+					resumeTimeText={resumeTimeText}
+					seasons={seasons}
+					episodes={episodes}
+					similar={similar}
+					extras={extras}
+					cast={cast}
+					nextUp={nextUp}
+					collectionItems={collectionItems}
+					albumTracks={albumTracks}
+					artistAlbums={artistAlbums}
+					playlistItems={playlistItems}
+					personMovies={personMovies}
+					personSeries={personSeries}
+					birthDate={birthDate}
+					birthPlace={birthPlace}
+					episodeRatings={episodeRatings}
+					mediaSource={mediaSource}
+					supportsMediaSourceSelection={supportsMediaSourceSelection}
+					hasMultipleVersions={hasMultipleVersions}
+					hasMultipleAudio={hasMultipleAudio}
+					handlePlay={handlePlay}
+					handleResume={handleResume}
+					handleShuffle={handleShuffle}
+					handleTrailer={handleTrailer}
+					handleToggleWatched={handleToggleWatched}
+					handleToggleFavorite={handleToggleFavorite}
+					handleGoToSeries={handleGoToSeries}
+					handleOpenVersionModal={handleOpenVersionModal}
+					handleOpenAudioModal={handleOpenAudioModal}
+					handleOpenSubtitleModal={handleOpenSubtitleModal}
+					handleOpenMediaInfo={handleOpenMediaInfo}
+					handleOpenPlaylistModal={handleOpenPlaylistModal}
+					handleOpenDeleteDialog={handleOpenDeleteDialog}
+					handleChapterSelect={handleChapterSelect}
+					handleExtraSelect={handleExtraSelect}
+					handleTrackPlay={handleTrackPlay}
+					onSelectItem={onSelectItem}
+					onSelectPerson={onSelectPerson}
+					onSelectStudio={onSelectStudio}
+				/>
+				{renderModals()}
+			</div>
+		);
+	}
+
 	// === PERSON RENDER ===
 
 	if (isPerson) {
@@ -2011,39 +2271,6 @@ const handleSectionKeyDown = useCallback((ev) => {
 
 	// === MAIN DETAILS RENDER (Movie / Series / Episode / BoxSet) ===
 
-	const trailerOverlayContent = trailerOverlay && (
-		<div className={css.trailerOverlay} onClick={handleCloseTrailer} onKeyDown={handleTrailerOverlayKeyDown}>
-			<SpottableButton className={css.trailerCloseBtn} onClick={handleCloseTrailer} spotlightId="trailer-close-btn">
-				<svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
-					<path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-				</svg>
-			</SpottableButton>
-			<div className={css.trailerIframeWrap} onClick={handleStopPropagation}>
-				{trailerStreamUrl ? (
-					<video
-						ref={trailerVideoRef}
-						className={css.trailerIframe}
-						src={trailerStreamUrl}
-						autoPlay
-						controls
-						playsInline
-						muted={settings.featuredTrailerMuted}
-					/>
-				) : (
-					<div className={css.trailerLoading}>
-						{$L('Loading trailer...')}
-					</div>
-				)}
-			</div>
-		</div>
-	);
-
-	const trailerOverlayLayer = trailerOverlayContent
-		? (typeof document !== 'undefined' && document.body
-			? createPortal(trailerOverlayContent, document.body)
-			: trailerOverlayContent)
-		: null;
-
 	return (
 		<div className={css.page}>
 			{renderBackdrop()}
@@ -2420,148 +2647,7 @@ const handleSectionKeyDown = useCallback((ev) => {
 				</div>
 			</Scroller>
 
-			{/* Version / Audio / Subtitle Track Modals */}
-			{activeModal === 'version' && (
-				<div className={css.trackModal} onClick={closeModal}>
-					<ModalContainer className={css.trackModalPanel} onClick={handleStopPropagation} data-modal="version" spotlightId="version-modal">
-						<h2 className={css.trackModalTitle}>{$L('Select Version')}</h2>
-						<div className={css.trackList}>
-							{item.MediaSources.map((source, i) => {
-								const video = source.MediaStreams?.find(s => s.Type === 'Video');
-								const resLabel = video?.Width >= 3800 ? '4K' : video?.Width >= 1900 ? '1080p' : video?.Width >= 1260 ? '720p' : video?.Width ? `${video.Width}p` : '';
-								const bitrate = source.Bitrate ? `${(source.Bitrate / 1000000).toFixed(1)} Mbps` : '';
-								const container = source.Container?.toUpperCase();
-								const detail = [resLabel, container, bitrate].filter(Boolean).join(' · ');
-								return (
-									<SpottableButton
-										key={source.Id}
-										className={`${css.trackItem} ${i === selectedVersionIndex ? css.selected : ''}`}
-										data-index={i}
-										data-selected={i === selectedVersionIndex ? 'true' : undefined}
-										onClick={handleSelectVersion}
-									>
-										<span className={css.trackName}>{source.Name || `${$L('Version')} ${i + 1}`}</span>
-										{detail && <span className={css.trackInfo}>{detail}</span>}
-									</SpottableButton>
-								);
-							})}
-						</div>
-						<p className={css.trackModalFooter}>{$L('Press BACK to close')}</p>
-					</ModalContainer>
-				</div>
-			)}
-			{activeModal === 'audio' && (
-				<div className={css.trackModal} onClick={closeModal}>
-					<ModalContainer className={css.trackModalPanel} onClick={handleStopPropagation} data-modal="audio" spotlightId="audio-modal">
-						<h2 className={css.trackModalTitle}>{$L('Select Audio Track')}</h2>
-						<div className={css.trackList}>
-							{audioStreams.map((stream, i) => (
-								<SpottableButton
-									key={stream.Index}
-									className={`${css.trackItem} ${i === selectedAudioIndex ? css.selected : ''}`}
-									data-index={i}
-									data-selected={i === selectedAudioIndex ? 'true' : undefined}
-									onClick={handleSelectAudio}
-								>
-									<span className={css.trackName}>{stream.DisplayTitle || stream.Language || `${$L('Track')} ${i + 1}`}</span>
-									{stream.Channels && <span className={css.trackInfo}>{stream.Channels}ch</span>}
-								</SpottableButton>
-							))}
-						</div>
-						<p className={css.trackModalFooter}>{$L('Press BACK to close')}</p>
-					</ModalContainer>
-				</div>
-			)}
-			{activeModal === 'subtitle' && (
-				<div className={css.trackModal} onClick={closeModal}>
-					<ModalContainer className={css.trackModalPanel} onClick={handleStopPropagation} data-modal="subtitle" spotlightId="subtitle-modal">
-						<h2 className={css.trackModalTitle}>{$L('Select Subtitle')}</h2>
-						<div className={css.trackList}>
-							<SpottableButton
-								className={`${css.trackItem} ${selectedSubtitleIndex === -1 ? css.selected : ''}`}
-								data-index={-1}
-								data-selected={selectedSubtitleIndex === -1 ? 'true' : undefined}
-								onClick={handleSelectSubtitle}
-							>
-								<span className={css.trackName}>{$L('Off')}</span>
-							</SpottableButton>
-							{subtitleStreams.map((stream, i) => (
-								<SpottableButton
-									key={stream.Index}
-									className={`${css.trackItem} ${i === selectedSubtitleIndex ? css.selected : ''}`}
-									data-index={i}
-									data-selected={i === selectedSubtitleIndex ? 'true' : undefined}
-									onClick={handleSelectSubtitle}
-								>
-									<span className={css.trackName}>{stream.DisplayTitle || stream.Language || `${$L('Track')} ${i + 1}`}</span>
-									{stream.IsForced && <span className={css.trackInfo}>{$L('Forced')}</span>}
-								</SpottableButton>
-							))}
-						</div>
-						<p className={css.trackModalFooter}>
-							<SpottableButton spotlightId="btn-subtitle-download" className={css.actionBtn} onClick={handleOpenRemoteSubtitleSearch}>
-								{$L('Download')}
-							</SpottableButton>
-						</p>
-						<p className={css.trackModalFooter} style={{marginTop: 5, fontSize: 14, opacity: 0.5}}>{$L('Press BACK to close')}</p>
-					</ModalContainer>
-				</div>
-			)}
-			{activeModal === 'subtitleDownload' && (
-				<div className={css.trackModal} onClick={closeModal}>
-					<ModalContainer className={css.trackModalPanel} onClick={handleStopPropagation} data-modal="subtitleDownload" spotlightId="subtitleDownload-modal">
-						<h2 className={css.trackModalTitle}>{$L('Download Subtitles')}</h2>
-						<div className={css.trackList}>
-							{isSearchingRemoteSubtitles && (
-								<SpottableDiv className={css.trackItem}>
-									<span className={css.trackName}>{$L('Searching...')}</span>
-								</SpottableDiv>
-							)}
-							{!isSearchingRemoteSubtitles && remoteSubtitleResults.length === 0 && (
-								<SpottableDiv className={css.trackItem}>
-									<span className={css.trackName}>{$L('No remote subtitles found')}</span>
-								</SpottableDiv>
-							)}
-							{!isSearchingRemoteSubtitles && remoteSubtitleResults.map((subtitle, idx) => (
-								<SpottableButton
-									key={subtitle.id || idx}
-									className={css.trackItem}
-									data-index={idx}
-									onClick={handleSelectRemoteSubtitle}
-									style={{flexDirection: 'column', alignItems: 'flex-start'}}
-								>
-									<span className={css.trackName}>{subtitle.name || $L('Subtitle')}</span>
-									{subtitle.info && <span className={css.trackInfo} style={{marginTop: 4}}>{subtitle.info}</span>}
-								</SpottableButton>
-							))}
-						</div>
-						<p className={css.trackModalFooter}>{$L('Press BACK to close')}</p>
-					</ModalContainer>
-				</div>
-			)}
-
-			{renderMediaInfoModal()}
-
-			{trailerOverlayLayer}
-
-			<AddToPlaylistModal
-				open={showPlaylistModal}
-				itemId={item?.Id}
-				api={effectiveApi}
-				onClose={handleClosePlaylistModal}
-				onSuccess={showToast}
-			/>
-
-			<DeleteItemDialog
-				open={showDeleteDialog}
-				itemName={item?.Name}
-				onCancel={handleCloseDeleteDialog}
-				onConfirm={handleConfirmDelete}
-			/>
-
-			{toastMessage && (
-				<div className={css.toast} onAnimationEnd={handleToastEnd}>{toastMessage}</div>
-			)}
+			{renderModals()}
 		</div>
 	);
 };
