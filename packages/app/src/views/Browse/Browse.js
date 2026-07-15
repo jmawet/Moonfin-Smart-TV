@@ -958,7 +958,7 @@ const Browse = ({
 							api.getResumeItems(),
 							api.getNextUp(),
 							api.getUserConfiguration().catch(() => null),
-							api.getRandomItems(settings.featuredContentType, settings.featuredItemCount),
+							api.getRandomItems(settings.featuredContentType, settings.featuredItemCount).catch(() => null),
 							settings.mergeContinueWatchingNextUp ? api.getItems({
 								IncludeItemTypes: 'Episode',
 								Filters: 'IsPlayed',
