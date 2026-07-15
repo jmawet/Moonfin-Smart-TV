@@ -437,6 +437,7 @@ const Browse = ({
 		if (FAVORITE_ROW_IDS.includes(rowId)) return settings.displayFavoritesRows;
 		if (rowId === 'collections') return settings.displayCollectionsRows;
 		if (rowId === 'genres') return settings.displayGenresRows;
+		if (rowId === 'playlists') return settings.displayPlaylistsRows;
 		if (rowId === 'imdb-top250-movies') return settings.imdbTop250MoviesEnabled;
 		if (rowId === 'imdb-top250-tv') return settings.imdbTop250TvShowsEnabled;
 		if (rowId === 'imdb-popular-movies') return settings.imdbMostPopularMoviesEnabled;
@@ -444,7 +445,7 @@ const Browse = ({
 		if (rowId === 'imdb-lowest-rated') return settings.imdbLowestRatedMoviesEnabled;
 		if (rowId === 'imdb-top-english') return settings.imdbTopEnglishMoviesEnabled;
 		return true;
-	}, [settings.displayFavoritesRows, settings.displayCollectionsRows, settings.displayGenresRows,
+	}, [settings.displayFavoritesRows, settings.displayCollectionsRows, settings.displayGenresRows, settings.displayPlaylistsRows,
 		settings.imdbTop250MoviesEnabled, settings.imdbTop250TvShowsEnabled, settings.imdbMostPopularMoviesEnabled,
 		settings.imdbMostPopularTvShowsEnabled, settings.imdbLowestRatedMoviesEnabled, settings.imdbTopEnglishMoviesEnabled]);
 
@@ -591,6 +592,7 @@ const Browse = ({
 			else if (row.id === 'library-tiles') title = $L('My Media');
 			else if (row.id === 'collections') title = $L('Collections');
 			else if (row.id === 'genres') title = $L('Genres');
+			else if (row.id === 'playlists') title = $L('Playlists');
 			else if (favoriteLabelMap.has(row.id)) title = favoriteLabelMap.get(row.id);
 			else if (row.isLatestRow && row.library) {
 				const libName = row.library._serverName
@@ -871,6 +873,7 @@ const Browse = ({
 				settings.displayFavoritesRows ||
 				settings.displayCollectionsRows ||
 				settings.displayGenresRows ||
+				settings.displayPlaylistsRows ||
 				hasEnabledImdbRow ||
 				hasEnabledRecommendationRow ||
 				(settings.pluginSections || []).some((section) => section?.enabled);
@@ -1063,6 +1066,7 @@ const Browse = ({
 				let collectionsResult = null;
 				let favoriteResults = [];
 				let genresResult = null;
+				let playlistsResult = null;
 				let pluginRows = [];
 				let sinceYouWatchedRows = [];
 				let rewatchItems = null;
@@ -1231,6 +1235,8 @@ const Browse = ({
 					const genresSortBy = settings.genresRowSortBy || 'SortName';
 					const genresSortOrder = getSortOrderFromSortBy(genresSortBy);
 					const genresIncludeTypes = getGenresIncludeTypes(settings.genresRowItemFilter);
+					const playlistsSortBy = settings.playlistsRowSortBy || 'SortName';
+					const playlistsSortOrder = getSortOrderFromSortBy(playlistsSortBy);
 					const enabledPluginSections = (settings.pluginSections || []).filter((section) => section.enabled);
 					const sinceYouWatchedIndexes = homeRowsConfig
 						.filter((row) => row.enabled && row.id.startsWith('since-you-watched-'))
@@ -1239,7 +1245,7 @@ const Browse = ({
 						.sort((a, b) => a - b);
 					const rewatchEnabled = homeRowsConfig.some((row) => row.enabled && row.id === 'rewatch');
 
-					[latestResults, recentlyReleasedResults, collectionsResult, favoriteResults, genresResult, pluginRows, sinceYouWatchedRows, rewatchItems] = await Promise.all([
+					[latestResults, recentlyReleasedResults, collectionsResult, favoriteResults, genresResult, playlistsResult, pluginRows, sinceYouWatchedRows, rewatchItems] = await Promise.all([
 						Promise.all(
 							eligibleLibraries.map(lib =>
 								api.getLatest(lib.Id, 16)
@@ -1276,6 +1282,9 @@ const Browse = ({
 							: Promise.resolve([]),
 						settings.displayGenresRows
 							? api.getGenres(undefined, genresIncludeTypes, genresSortBy, genresSortOrder).catch(() => null)
+							: Promise.resolve(null),
+						settings.displayPlaylistsRows
+							? api.getPlaylists(playlistsSortBy, playlistsSortOrder).catch(() => null)
 							: Promise.resolve(null),
 						Promise.all(enabledPluginSections.map((section) => fetchPluginSectionRow(section))),
 						sinceYouWatchedIndexes.length
@@ -1368,6 +1377,15 @@ const Browse = ({
 					});
 				}
 
+				if (playlistsResult?.Items?.length > 0) {
+					newRows.push({
+						id: 'playlists',
+						title: $L('Playlists'),
+						items: playlistsResult.Items,
+						type: 'square'
+					});
+				}
+
 				imdbResults.forEach((res) => {
 					if (res.items?.length > 0) {
 						newRows.push({
@@ -1425,10 +1443,12 @@ const Browse = ({
 		settings.displayFavoritesRows,
 		settings.displayCollectionsRows,
 		settings.displayGenresRows,
+		settings.displayPlaylistsRows,
 		settings.favoritesRowSortBy,
 		settings.collectionsRowSortBy,
 		settings.genresRowSortBy,
 		settings.genresRowItemFilter,
+		settings.playlistsRowSortBy,
 		settings.uiLanguage,
 		settings.pluginSections,
 		settings.mergeContinueWatchingNextUp,

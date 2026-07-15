@@ -503,8 +503,8 @@ export const api = {
 			method: 'POST'
 		}),
 
-	getPlaylists: () =>
-		request(`/Users/${currentUser}/Items?IncludeItemTypes=Playlist&Recursive=true&SortBy=SortName&SortOrder=Ascending`),
+	getPlaylists: (sortBy = 'SortName', sortOrder = 'Ascending') =>
+		request(`/Users/${currentUser}/Items?IncludeItemTypes=Playlist&Recursive=true&SortBy=${sortBy}&SortOrder=${sortOrder}`),
 
 	createPlaylist: (name, itemIds = []) =>
 		request('/Playlists', {
@@ -765,8 +765,8 @@ export const createApiForServer = (serverUrl, token, userId, serverTypeOverride 
 				method: 'POST'
 			}),
 
-		getPlaylists: () =>
-			serverRequest(`/Users/${userId}/Items?IncludeItemTypes=Playlist&Recursive=true&SortBy=SortName&SortOrder=Ascending`),
+		getPlaylists: (sortBy = 'SortName', sortOrder = 'Ascending') =>
+			serverRequest(`/Users/${userId}/Items?IncludeItemTypes=Playlist&Recursive=true&SortBy=${sortBy}&SortOrder=${sortOrder}`),
 
 		createPlaylist: (name, itemIds = []) =>
 			serverRequest('/Playlists', {

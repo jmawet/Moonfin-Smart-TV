@@ -534,6 +534,7 @@ const isHomeRowVisibleByGates = (rowId, currentSettings) => {
 	if (FAVORITES_ROW_IDS.includes(rowId)) return currentSettings.displayFavoritesRows;
 	if (rowId === 'collections') return currentSettings.displayCollectionsRows;
 	if (rowId === 'genres') return currentSettings.displayGenresRows;
+	if (rowId === 'playlists') return currentSettings.displayPlaylistsRows;
 	if (rowId === 'imdb-top250-movies') return currentSettings.imdbTop250MoviesEnabled;
 	if (rowId === 'imdb-top250-tv') return currentSettings.imdbTop250TvShowsEnabled;
 	if (rowId === 'imdb-popular-movies') return currentSettings.imdbMostPopularMoviesEnabled;
@@ -1642,6 +1643,14 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 				renderOptionItem('genresRowSortBy', $L('Genres Row Sorting'), getHomeRowSortOptions(), $L('Name'), 'arrowupdown')}
 			{settings.displayGenresRows &&
 				renderOptionItem('genresRowItemFilter', $L('Genres Row Items'), getGenresRowItemFilterOptions(), $L('Movies & TV Shows'), 'filter')}
+			{renderToggleItem(
+				'displayPlaylistsRows',
+				$L('Display Playlists Rows'),
+				$L('Show Playlists rows in Home Sections.'),
+				'bookmark'
+			)}
+			{settings.displayPlaylistsRows &&
+				renderOptionItem('playlistsRowSortBy', $L('Playlists Row Sorting'), getHomeRowSortOptions(), $L('Name'), 'arrowupdown')}
 			{renderOptionItem('homeRowsImageType', $L('Per Row Image Type Selection'), getImageTypeOptions(), $L('Poster'), 'picture')}
 		</>
 	);

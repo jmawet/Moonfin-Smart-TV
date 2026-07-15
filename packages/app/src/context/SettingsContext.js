@@ -31,7 +31,8 @@ const DEFAULT_HOME_ROWS = [
 	{id: 'since-you-watched-3', name: 'Since You Watched Row 3', enabled: false, order: 23},
 	{id: 'since-you-watched-4', name: 'Since You Watched Row 4', enabled: false, order: 24},
 	{id: 'since-you-watched-5', name: 'Since You Watched Row 5', enabled: false, order: 25},
-	{id: 'rewatch', name: 'Rewatch', enabled: false, order: 26}
+	{id: 'rewatch', name: 'Rewatch', enabled: false, order: 26},
+	{id: 'playlists', name: 'Playlists', enabled: false, order: 27}
 ];
 
 const DEFAULT_SEERR_HOME_ROWS = [
@@ -88,6 +89,7 @@ const defaultSettings = {
 	displayFavoritesRows: false,
 	displayCollectionsRows: false,
 	displayGenresRows: false,
+	displayPlaylistsRows: false,
 	displaySeerrRows: false,
 	externalHomeRows: DEFAULT_EXTERNAL_HOME_ROWS,
 	customHomeRows: [],
@@ -104,6 +106,7 @@ const defaultSettings = {
 	collectionsRowSortBy: 'SortName',
 	genresRowSortBy: 'SortName',
 	genresRowItemFilter: 'all',
+	playlistsRowSortBy: 'SortName',
 	fullScreenRows: false,
 	showShuffleButton: true,
 	shuffleContentType: 'both',
@@ -397,7 +400,7 @@ const SYNCABLE_KEYS = [
 	'homeRowOverlay', 'folderViewMode',
 	'excludedGenres',
 	'autoAdvance', 'autoAdvanceInterval',
-	'displayFavoritesRows', 'displayCollectionsRows', 'displayGenresRows', 'displaySeerrRows',
+	'displayFavoritesRows', 'displayCollectionsRows', 'displayGenresRows', 'displayPlaylistsRows', 'displaySeerrRows',
 	'favoritesRowSortBy', 'collectionsRowSortBy', 'genresRowSortBy', 'genresRowItemFilter',
 	'stillWatchingPrompt', 'watchedIndicatorBehavior',
 	'backdropBlurHome', 'backdropBlurDetail',
