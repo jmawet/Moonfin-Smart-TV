@@ -3,25 +3,31 @@ import $L from '@enact/i18n/$L';
 import Spottable from '@enact/spotlight/Spottable';
 import SpotlightContainerDecorator from '@enact/spotlight/SpotlightContainerDecorator';
 import Spotlight from '@enact/spotlight';
+import {isPaused} from '@enact/spotlight/Pause';
 import {useAuth} from '../../context/AuthContext';
 import {useSettings} from '../../context/SettingsContext';
 import {useSeerr} from '../../context/SeerrContext';
 import * as connectionPool from '../../services/connectionPool';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import ProxiedImage from '../../components/ProxiedImage';
+import DetailsTabBar from '../../components/DetailsTabBar';
+import GameCard from '../../components/GameCard';
 import {KEYS} from '../../utils/keys';
 import {getImageUrl} from '../../utils/helpers';
+import {isGameLibrary} from '../../utils/gameLibrary';
+import {groupSearchResults, aspectClassForType, isCircleType, filterByName, fetchAllGames, filterGames} from '../../utils/searchGroups';
 import SpottableInput from '../../components/SpottableInput/SpottableInput';
 
 import css from './Search.module.less';
 
 const SpottableDiv = Spottable('div');
 const RowContainer = SpotlightContainerDecorator({enterTo: 'last-focused', restrict: 'self-first'}, 'div');
+const GridContainer = SpotlightContainerDecorator({enterTo: 'last-focused', leaveFor: {up: 'search-tabs'}}, 'div');
 
 const SEARCH_DEBOUNCE_MS = 400;
 const MIN_SEARCH_LENGTH = 2;
-const ITEMS_PER_PAGE = 12;
-const MAX_SEARCH_RESULTS = 50;
+const GLOBAL_FETCH_LIMIT = 240;
+const SEERR_CAP = 24;
 
 const SearchIcon = () => (
 	<svg viewBox="0 0 24 24" fill="currentColor" className={css.searchIcon}>
@@ -29,361 +35,403 @@ const SearchIcon = () => (
 	</svg>
 );
 
-const Search = ({onSelectItem, onSelectPerson}) => {
+const cardSizeClass = (type) => {
+	const aspect = aspectClassForType(type);
+	if (aspect === 'wide') return {card: css.cardWide, img: css.imgWide};
+	if (aspect === 'square') return {card: css.cardSquare, img: css.imgSquare};
+	return {card: css.cardPoster, img: css.imgPoster};
+};
+
+const jellyfinSubtitle = (item) => {
+	switch (item.Type) {
+		case 'Episode':
+			return `${item.SeriesName || ''} S${item.ParentIndexNumber ?? '?'}E${item.IndexNumber ?? '?'}`;
+		case 'Person':
+			return $L('Person');
+		case 'MusicArtist':
+		case 'AlbumArtist':
+			return $L('Artist');
+		case 'MusicAlbum':
+			return item.AlbumArtist || item.ProductionYear || '';
+		case 'Audio':
+			return item.AlbumArtist || item.Artists?.[0] || item.Album || '';
+		default:
+			return item.ProductionYear || '';
+	}
+};
+
+const Search = ({onSelectItem, onSelectPerson, onSelectGame, onPlayChannel}) => {
 	const {api, serverUrl, hasMultipleServers} = useAuth();
 	const {settings} = useSettings();
 	const unifiedMode = settings.unifiedLibraryMode && hasMultipleServers;
-	const {isEnabled: seerrEnabled, api: seerrApi} = useSeerr();
+	const {isEnabled: seerrEnabled, api: seerrApi, displayName: seerrName} = useSeerr();
+
 	const [query, setQuery] = useState('');
 	const [isLoading, setIsLoading] = useState(false);
-	const [results, setResults] = useState({
-		movies: [],
-		shows: [],
-		episodes: [],
-		people: [],
-		albums: [],
-		artists: [],
-		songs: [],
-		seerr: []
-	});
-	const [displayCounts, setDisplayCounts] = useState({
-		movies: ITEMS_PER_PAGE,
-		shows: ITEMS_PER_PAGE,
-		episodes: ITEMS_PER_PAGE,
-		people: ITEMS_PER_PAGE,
-		albums: ITEMS_PER_PAGE,
-		artists: ITEMS_PER_PAGE,
-		songs: ITEMS_PER_PAGE,
-		seerr: ITEMS_PER_PAGE
-	});
+	const [groups, setGroups] = useState([]);
+	const [seerrResults, setSeerrResults] = useState([]);
+	const [gameResults, setGameResults] = useState([]);
+	const [activeTab, setActiveTab] = useState('all');
+
 	const debounceRef = useRef(null);
+	const requestIdRef = useRef(0);
 	const scrollerRefs = useRef({});
+	const gameLibrariesRef = useRef([]);
+	const hasLiveTvRef = useRef(false);
+	const allGamesRef = useRef(null);
 
-	const hasResults = useMemo(() => {
-		return results.movies.length > 0 ||
-			results.shows.length > 0 ||
-			results.episodes.length > 0 ||
-			results.people.length > 0 ||
-			results.albums.length > 0 ||
-			results.artists.length > 0 ||
-			results.songs.length > 0 ||
-			results.seerr.length > 0;
-	}, [results]);
+	// Discover game and Live TV libraries once so search can widen its scope.
+	useEffect(() => {
+		let cancelled = false;
+		(async () => {
+			try {
+				const views = await api.getLibraries();
+				if (cancelled) return;
+				const libs = views?.Items || [];
+				gameLibrariesRef.current = libs.filter((lib) => isGameLibrary(lib.CollectionType, lib.Name));
+				hasLiveTvRef.current = libs.some((lib) => lib.CollectionType === 'livetv');
+			} catch (_err) {
+				void _err;
+			}
+		})();
+		return () => { cancelled = true; };
+	}, [api]);
 
-	const getVisibleItems = useCallback((items, rowId) => {
-		const count = displayCounts[rowId] || ITEMS_PER_PAGE;
-		return items.slice(0, count);
-	}, [displayCounts]);
+	const seerrLabel = seerrName || $L('Seerr');
 
-	const visibleRows = useMemo(() => {
-		const rows = [];
-		if (results.movies.length > 0) rows.push({id: 'movies', title: $L('Movies'), items: getVisibleItems(results.movies, 'movies'), totalCount: results.movies.length, type: 'jellyfin'});
-		if (results.shows.length > 0) rows.push({id: 'shows', title: $L('TV Shows'), items: getVisibleItems(results.shows, 'shows'), totalCount: results.shows.length, type: 'jellyfin'});
-		if (results.episodes.length > 0) rows.push({id: 'episodes', title: $L('Episodes'), items: getVisibleItems(results.episodes, 'episodes'), totalCount: results.episodes.length, type: 'jellyfin'});
-		if (results.artists.length > 0) rows.push({id: 'artists', title: $L('Artists'), items: getVisibleItems(results.artists, 'artists'), totalCount: results.artists.length, type: 'jellyfin'});
-		if (results.albums.length > 0) rows.push({id: 'albums', title: $L('Albums'), items: getVisibleItems(results.albums, 'albums'), totalCount: results.albums.length, type: 'jellyfin'});
-		if (results.songs.length > 0) rows.push({id: 'songs', title: $L('Songs'), items: getVisibleItems(results.songs, 'songs'), totalCount: results.songs.length, type: 'jellyfin'});
-		if (results.people.length > 0) rows.push({id: 'people', title: $L('People'), items: getVisibleItems(results.people, 'people'), totalCount: results.people.length, type: 'jellyfin'});
-		if (results.seerr.length > 0) rows.push({id: 'seerr', title: $L('Seerr'), items: getVisibleItems(results.seerr, 'seerr'), totalCount: results.seerr.length, type: 'seerr'});
-		return rows;
-	}, [results, getVisibleItems]);
-
-	const loadMoreItems = useCallback((rowId) => {
-		setDisplayCounts(prev => ({
-			...prev,
-			[rowId]: (prev[rowId] || ITEMS_PER_PAGE) + ITEMS_PER_PAGE
-		}));
+	// Focus the All pill itself. Focusing the tab container would land on the
+	// first pill, which is Seerr or Games when either has results.
+	const focusAllTab = useCallback(() => {
+		if (!Spotlight.focus('[data-spotlight-id="search-tabs"] [data-id="all"]')) {
+			Spotlight.focus('search-tabs');
+		}
 	}, []);
 
 	const doSearch = useCallback(async (searchQuery) => {
-		if (!searchQuery || searchQuery.length < MIN_SEARCH_LENGTH) {
-			setResults({movies: [], shows: [], episodes: [], people: [], albums: [], artists: [], songs: [], seerr: []});
-			setDisplayCounts({
-				movies: ITEMS_PER_PAGE,
-				shows: ITEMS_PER_PAGE,
-				episodes: ITEMS_PER_PAGE,
-				people: ITEMS_PER_PAGE,
-				albums: ITEMS_PER_PAGE,
-				artists: ITEMS_PER_PAGE,
-				songs: ITEMS_PER_PAGE,
-				seerr: ITEMS_PER_PAGE
-			});
+		const q = (searchQuery || '').trim();
+		if (q.length < MIN_SEARCH_LENGTH) {
+			setGroups([]);
+			setSeerrResults([]);
+			setGameResults([]);
 			return;
 		}
 
+		const requestId = ++requestIdRef.current;
+		const isStudioQuery = q.toLowerCase().startsWith('studio:');
 		setIsLoading(true);
-		setDisplayCounts({
-			movies: ITEMS_PER_PAGE,
-			shows: ITEMS_PER_PAGE,
-			episodes: ITEMS_PER_PAGE,
-			people: ITEMS_PER_PAGE,
-			albums: ITEMS_PER_PAGE,
-			artists: ITEMS_PER_PAGE,
-			songs: ITEMS_PER_PAGE,
-			seerr: ITEMS_PER_PAGE
-		});
 
 		try {
-			let items;
-			if (unifiedMode) {
-				// Search all servers in unified mode
-				items = await connectionPool.searchAllServers(searchQuery, MAX_SEARCH_RESULTS);
-			} else {
-				const result = await api.search(searchQuery, MAX_SEARCH_RESULTS);
-				items = result.Items || [];
+			const [libraryResult, channels] = await Promise.all([
+				unifiedMode
+					? connectionPool.searchAllServers(q, GLOBAL_FETCH_LIMIT).then((serverItems) => ({Items: serverItems}))
+					: api.search(q, GLOBAL_FETCH_LIMIT),
+				hasLiveTvRef.current && !isStudioQuery
+					? api.getLiveTvChannels(0, 500).then((r) => r?.Items || []).catch(() => [])
+					: Promise.resolve([])
+			]);
+			if (requestId !== requestIdRef.current) return;
+
+			const items = [...(libraryResult.Items || []), ...filterByName(channels, q)];
+			setGroups(groupSearchResults(items));
+			setIsLoading(false);
+			// A new query always starts on All. Focus it once the tabs render, unless
+			// the user is still typing, in which case Spotlight is paused and the
+			// input keeps focus until they press down.
+			setActiveTab('all');
+			if (!isPaused()) {
+				setTimeout(focusAllTab, 50);
 			}
 
-			const categorized = {
-				movies: items.filter(item => item.Type === 'Movie'),
-				shows: items.filter(item => item.Type === 'Series'),
-				episodes: items.filter(item => item.Type === 'Episode'),
-				people: items.filter(item => item.Type === 'Person'),
-				albums: items.filter(item => item.Type === 'MusicAlbum'),
-				artists: items.filter(item => item.Type === 'MusicArtist'),
-				songs: items.filter(item => item.Type === 'Audio'),
-				seerr: []
-			};
+			// Seerr and Games load after the library results so the rows appear first.
+			if (seerrEnabled && seerrApi && !isStudioQuery) {
+				seerrApi.search(q).then((res) => {
+					if (requestId !== requestIdRef.current) return;
+					const filtered = (res.results || []).filter((r) => r.mediaType !== 'person').slice(0, SEERR_CAP);
+					setSeerrResults(filtered);
+				}).catch((err) => console.error('Seerr search failed:', err));
+			} else {
+				setSeerrResults([]);
+			}
 
-			setResults(categorized);
-
-			if (seerrEnabled && seerrApi) {
-				try {
-					const seerrResponse = await seerrApi.search(searchQuery);
-					const filteredResults = (seerrResponse.results || [])
-						.filter(item => item.mediaType !== 'person')
-						.slice(0, 20);
-					setResults(prev => ({...prev, seerr: filteredResults}));
-				} catch (err) {
-					console.error('Seerr search failed:', err);
+			if (gameLibrariesRef.current.length > 0 && !isStudioQuery) {
+				if (!allGamesRef.current) {
+					allGamesRef.current = await fetchAllGames(gameLibrariesRef.current);
 				}
+				if (requestId !== requestIdRef.current) return;
+				setGameResults(filterGames(allGamesRef.current, q));
+			} else {
+				setGameResults([]);
 			}
 		} catch (err) {
+			if (requestId !== requestIdRef.current) return;
 			console.error('Search failed:', err);
-			setResults({movies: [], shows: [], episodes: [], people: [], albums: [], artists: [], songs: [], seerr: []});
-		} finally {
+			setGroups([]);
+			setSeerrResults([]);
+			setGameResults([]);
 			setIsLoading(false);
 		}
-	}, [api, seerrEnabled, seerrApi, unifiedMode]);
+	}, [api, seerrEnabled, seerrApi, unifiedMode, focusAllTab]);
 
 	const handleInputChange = useCallback((e) => {
 		let value = e.target.value;
-		try { value = decodeURIComponent(escape(value)); } catch (_) { /* ignore */ }
+		try { value = decodeURIComponent(escape(value)); } catch (_err) { void _err; }
 		setQuery(value);
-
-		if (debounceRef.current) {
-			clearTimeout(debounceRef.current);
-		}
-
-		debounceRef.current = setTimeout(() => {
-			doSearch(value);
-		}, SEARCH_DEBOUNCE_MS);
+		if (debounceRef.current) clearTimeout(debounceRef.current);
+		debounceRef.current = setTimeout(() => doSearch(value), SEARCH_DEBOUNCE_MS);
 	}, [doSearch]);
 
+	const handleClearSearch = useCallback(() => {
+		setQuery('');
+		setGroups([]);
+		setSeerrResults([]);
+		setGameResults([]);
+		Spotlight.focus('search-input');
+	}, []);
+
+	const totalCount = useMemo(() => (
+		groups.reduce((sum, g) => sum + g.items.length, 0) + seerrResults.length + gameResults.length
+	), [groups, seerrResults, gameResults]);
+
+	const tabs = useMemo(() => {
+		const list = [];
+		if (seerrResults.length > 0) list.push({id: 'seerr', label: `${seerrLabel}: ${seerrResults.length}`});
+		if (gameResults.length > 0) list.push({id: 'games', label: `${$L('Games')}: ${gameResults.length}`});
+		list.push({id: 'all', label: `${$L('All')}: ${totalCount}`});
+		groups.forEach((g) => list.push({id: g.key, label: `${g.title}: ${g.items.length}`}));
+		return list;
+	}, [groups, seerrResults.length, gameResults.length, totalCount, seerrLabel]);
+
+	const hasResults = totalCount > 0;
+
+	// Keep the active tab valid as results change.
+	useEffect(() => {
+		if (!tabs.find((t) => t.id === activeTab)) setActiveTab('all');
+	}, [tabs, activeTab]);
+
+	const handleSelectTab = useCallback((id) => setActiveTab(id), []);
+
+	// Rows shown in the All tab: groups first, then Seerr, then Games.
+	const allRows = useMemo(() => {
+		const rows = groups.map((g) => ({id: g.key, title: g.title, items: g.items, kind: 'jellyfin'}));
+		if (seerrResults.length > 0) rows.push({id: 'seerr', title: seerrLabel, items: seerrResults, kind: 'seerr'});
+		if (gameResults.length > 0) rows.push({id: 'games', title: $L('Games'), items: gameResults, kind: 'game'});
+		return rows;
+	}, [groups, seerrResults, gameResults, seerrLabel]);
+
+	useEffect(() => {
+		setTimeout(() => Spotlight.focus('search-input'), 100);
+	}, []);
+
+	useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
+
+	// D-pad hand-offs between the input, the tabs and the content.
 	const handleInputKeyDown = useCallback((e) => {
-		if (e.keyCode === KEYS.DOWN) {
+		if (e.keyCode === KEYS.DOWN && hasResults) {
 			e.preventDefault();
-			if (visibleRows.length > 0) {
-				Spotlight.focus('search-row-0');
-			}
-		} else if (e.keyCode === KEYS.UP) {
-			e.preventDefault();
+			focusAllTab();
 		}
-	}, [visibleRows.length]);
+	}, [hasResults, focusAllTab]);
+
+	const focusContent = useCallback(() => {
+		Spotlight.focus(activeTab === 'all' ? 'search-row-0' : 'search-grid');
+	}, [activeTab]);
+
+	const handleTabsKeyDown = useCallback((e) => {
+		if (e.keyCode === KEYS.UP) {
+			e.preventDefault();
+			Spotlight.focus('search-input');
+		} else if (e.keyCode === KEYS.DOWN) {
+			e.preventDefault();
+			focusContent();
+		}
+	}, [focusContent]);
 
 	const handleRowKeyDown = useCallback((e) => {
 		const rowIndex = parseInt(e.currentTarget.dataset.rowIndex, 10);
 		if (e.keyCode === KEYS.UP) {
 			e.preventDefault();
 			e.stopPropagation();
-			if (rowIndex === 0) {
-				Spotlight.focus('search-input');
-			} else {
-				Spotlight.focus(`search-row-${rowIndex - 1}`);
-			}
+			Spotlight.focus(rowIndex === 0 ? 'search-tabs' : `search-row-${rowIndex - 1}`);
 		} else if (e.keyCode === KEYS.DOWN) {
 			e.preventDefault();
 			e.stopPropagation();
-			if (rowIndex < visibleRows.length - 1) {
-				Spotlight.focus(`search-row-${rowIndex + 1}`);
-			}
+			if (rowIndex < allRows.length - 1) Spotlight.focus(`search-row-${rowIndex + 1}`);
 		}
-	}, [visibleRows.length]);
+	}, [allRows.length]);
 
-	const handleClearSearch = useCallback(() => {
-		setQuery('');
-		setResults({movies: [], shows: [], episodes: [], people: [], seerr: []});
+	const handleRowFocus = useCallback((rowId) => (e) => {
+		const card = e.target.closest('[data-spotlight-id]');
+		const scroller = scrollerRefs.current[rowId];
+		if (!card || !scroller) return;
+		const cardRect = card.getBoundingClientRect();
+		const scrollerRect = scroller.getBoundingClientRect();
+		if (cardRect.left < scrollerRect.left) {
+			scroller.scrollLeft -= (scrollerRect.left - cardRect.left + 50);
+		} else if (cardRect.right > scrollerRect.right) {
+			scroller.scrollLeft += (cardRect.right - scrollerRect.right + 50);
+		}
 	}, []);
 
-	const handleCardClick = useCallback((e) => {
-		const card = e.currentTarget;
-		const itemId = card.dataset.itemId;
-		const itemType = card.dataset.itemType;
-		const isSeerr = itemType === 'seerr';
-
-		if (isSeerr) {
-			const seerrItem = results.seerr.find(item => String(item.id) === itemId);
-			if (seerrItem) {
-				const mediaType = seerrItem.mediaType || seerrItem.media_type || (seerrItem.title ? 'movie' : 'tv');
-				onSelectItem?.({
-					...seerrItem,
-					isSeerr: true,
-					mediaId: seerrItem.mediaId || seerrItem.tmdbId || seerrItem.id || seerrItem.Id,
-					mediaType,
-					Id: seerrItem.id,
-					Name: seerrItem.title || seerrItem.name,
-					Type: mediaType === 'movie' ? 'Movie' : 'Series'
-				});
-			}
+	const handleSelectJellyfin = useCallback((item) => {
+		if (item.Type === 'Person') {
+			onSelectPerson?.(item);
+		} else if (item.Type === 'TvChannel' || item.Type === 'LiveTvChannel') {
+			(onPlayChannel || onSelectItem)?.(item);
 		} else {
-			const allItems = [...results.movies, ...results.shows, ...results.episodes, ...results.people, ...results.albums, ...results.artists, ...results.songs];
-			const item = allItems.find(i => i.Id === itemId);
-			if (item) {
-				if (item.Type === 'Person') {
-					onSelectPerson?.(item);
-				} else {
-					onSelectItem?.(item);
-				}
-			}
+			onSelectItem?.(item);
 		}
-	}, [results, onSelectItem, onSelectPerson]);
+	}, [onSelectItem, onSelectPerson, onPlayChannel]);
 
-	const handleRowFocus = useCallback((rowId, totalCount) => {
-		return (e) => {
-			const card = e.target.closest('[data-spotlight-id]');
-			const scroller = scrollerRefs.current[rowId];
-			if (card && scroller) {
-				const cardRect = card.getBoundingClientRect();
-				const scrollerRect = scroller.getBoundingClientRect();
-				if (cardRect.left < scrollerRect.left) {
-					scroller.scrollLeft -= (scrollerRect.left - cardRect.left + 50);
-				} else if (cardRect.right > scrollerRect.right) {
-					scroller.scrollLeft += (cardRect.right - scrollerRect.right + 50);
-				}
-			}
+	const handleSelectSeerr = useCallback((item) => {
+		const mediaType = item.mediaType || item.media_type || (item.title ? 'movie' : 'tv');
+		onSelectItem?.({
+			...item,
+			isSeerr: true,
+			mediaId: item.mediaId || item.tmdbId || item.id || item.Id,
+			mediaType,
+			Id: item.id,
+			Name: item.title || item.name,
+			Type: mediaType === 'movie' ? 'Movie' : 'Series'
+		});
+	}, [onSelectItem]);
 
-			const spotlightId = card?.dataset?.spotlightId || '';
-			const match = spotlightId.match(/item-(\d+)$/);
-			if (match) {
-				const itemIndex = parseInt(match[1], 10);
-				const currentDisplayCount = displayCounts[rowId] || ITEMS_PER_PAGE;
-				if (itemIndex >= currentDisplayCount - 3 && currentDisplayCount < totalCount) {
-					loadMoreItems(rowId);
-				}
-			}
-		};
-	}, [displayCounts, loadMoreItems]);
+	// One click handler for every card keeps a stable reference across the grid
+	// instead of a closure per card.
+	const handleCardClick = useCallback((e) => {
+		const {kind, id} = e.currentTarget.dataset;
+		if (kind === 'seerr') {
+			const item = seerrResults.find((i) => String(i.id) === id);
+			if (item) handleSelectSeerr(item);
+			return;
+		}
+		for (const group of groups) {
+			const item = group.items.find((i) => i.Id === id);
+			if (item) { handleSelectJellyfin(item); return; }
+		}
+	}, [groups, seerrResults, handleSelectSeerr, handleSelectJellyfin]);
 
-	useEffect(() => {
-		setTimeout(() => {
-			Spotlight.focus('search-input');
-		}, 100);
-	}, []);
+	const handleGameSelect = useCallback((game) => onSelectGame?.(game._library, game), [onSelectGame]);
 
-	useEffect(() => {
-		return () => {
-			if (debounceRef.current) {
-				clearTimeout(debounceRef.current);
-			}
-		};
-	}, []);
-
-	const renderSeerrCard = useCallback((item, index, rowId) => {
-		const imageUrl = item.posterPath
-			? seerrApi.getImageUrl(item.posterPath, 'w300')
-			: null;
-		const year = item.releaseDate
-			? new Date(item.releaseDate).getFullYear()
-			: item.firstAirDate
-				? new Date(item.firstAirDate).getFullYear()
-				: '';
-
-		return (
-			<SpottableDiv
-				key={`seerr-${item.id}`}
-				className={css.card}
-				onClick={handleCardClick}
-				data-item-id={String(item.id)}
-				data-item-type="seerr"
-				spotlightId={`${rowId}-item-${index}`}
-			>
-				<div className={css.cardImageWrapper}>
-					{imageUrl ? (
-						<ProxiedImage className={css.cardImage} src={imageUrl} alt={item.title || item.name} />
-					) : (
-						<div className={css.cardPlaceholder}>
-							{item.mediaType === 'movie' ? '🎬' : '📺'}
-						</div>
-					)}
-				</div>
-				<div className={css.cardInfo}>
-					<div className={css.cardTitle}>{item.title || item.name}</div>
-					<div className={css.cardSubtitle}>{year}</div>
-				</div>
-			</SpottableDiv>
-		);
-	}, [handleCardClick, seerrApi]);
-
-	const renderJellyfinCard = useCallback((item, index, rowId) => {
-		const isPerson = item.Type === 'Person';
-		const isEpisode = item.Type === 'Episode';
-		const isAlbum = item.Type === 'MusicAlbum';
-		const isArtist = item.Type === 'MusicArtist';
-		const isSong = item.Type === 'Audio';
-		const hasImage = item.ImageTags?.Primary || item.PrimaryImageTag;
-		// Support cross-server items with their own server URL
+	const renderJellyfinCard = useCallback((item, spotlightId) => {
+		const {card, img} = cardSizeClass(item.Type);
+		const circle = isCircleType(item.Type);
 		const itemServerUrl = item._serverUrl || serverUrl;
-		// For songs without their own image, use album art
+		const hasImage = item.ImageTags?.Primary || item.PrimaryImageTag;
 		let imageUrl = hasImage ? getImageUrl(itemServerUrl, item.Id, 'Primary') : null;
-		if (!imageUrl && isSong && item.AlbumId && item.AlbumPrimaryImageTag) {
+		if (!imageUrl && item.Type === 'Audio' && item.AlbumId && item.AlbumPrimaryImageTag) {
 			imageUrl = getImageUrl(itemServerUrl, item.AlbumId, 'Primary');
 		}
-
-		let subtitle = '';
-		if (isEpisode) {
-			subtitle = `${item.SeriesName || ''} S${item.ParentIndexNumber || '?'}E${item.IndexNumber || '?'}`;
-		} else if (isPerson) {
-			subtitle = $L('Person');
-		} else if (isAlbum) {
-			subtitle = item.AlbumArtist || item.ProductionYear || '';
-		} else if (isArtist) {
-			subtitle = $L('Artist');
-		} else if (isSong) {
-			subtitle = item.AlbumArtist || item.Artists?.[0] || item.Album || '';
-		} else {
-			subtitle = item.ProductionYear || '';
-		}
-
 		return (
 			<SpottableDiv
 				key={item.Id}
-				className={`${css.card} ${isPerson ? css.personCard : ''} ${isEpisode ? css.episodeCard : ''} ${isAlbum || isArtist || isSong ? css.musicCard : ''}`}
+				className={`${css.card} ${card}`}
 				onClick={handleCardClick}
-				data-item-id={item.Id}
-				data-item-type="jellyfin"
-				spotlightId={`${rowId}-item-${index}`}
+				data-kind="jellyfin"
+				data-id={item.Id}
+				spotlightId={spotlightId}
 			>
-				<div className={`${css.cardImageWrapper} ${isPerson ? css.personImageWrapper : ''} ${isEpisode ? css.episodeImageWrapper : ''} ${isAlbum || isArtist || isSong ? css.musicImageWrapper : ''}`}>
-					{unifiedMode && item._serverName && (
-						<div className={css.serverBadge}>{item._serverName}</div>
-					)}
-					{imageUrl ? (
-						<img className={`${css.cardImage} ${isPerson ? css.personImage : ''}`} src={imageUrl} alt={item.Name} />
-					) : (
-						<div className={css.cardPlaceholder}>{isPerson ? '👤' : isAlbum || isSong ? '🎵' : isArtist ? '🎤' : '🎬'}</div>
-					)}
+				<div className={`${css.cardImg} ${img} ${circle ? css.imgCircle : ''}`}>
+					{unifiedMode && item._serverName && <div className={css.serverBadge}>{item._serverName}</div>}
+					{imageUrl
+						? <img className={css.cardImage} src={imageUrl} alt={item.Name} loading="lazy" />
+						: <div className={css.cardPlaceholder}>{circle ? '👤' : '🎬'}</div>}
 					{item.UserData?.Played && (
 						<div className={css.watchedBadge}>
 							<svg viewBox="0 0 24 24"><path fill="white" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
 						</div>
 					)}
 				</div>
-				<div className={css.cardInfo}>
-					<div className={css.cardTitle}>{item.Name}</div>
-					<div className={css.cardSubtitle}>{subtitle}</div>
-				</div>
+				<div className={css.cardTitle}>{item.Name}</div>
+				<div className={css.cardSubtitle}>{jellyfinSubtitle(item)}</div>
 			</SpottableDiv>
 		);
-	}, [serverUrl, handleCardClick, unifiedMode]);
+	}, [serverUrl, unifiedMode, handleCardClick]);
+
+	const renderSeerrCard = useCallback((item, spotlightId) => {
+		const imageUrl = item.posterPath ? seerrApi.getImageUrl(item.posterPath, 'w300') : null;
+		const year = item.releaseDate ? new Date(item.releaseDate).getFullYear()
+			: item.firstAirDate ? new Date(item.firstAirDate).getFullYear() : '';
+		return (
+			<SpottableDiv
+				key={`seerr-${item.id}`}
+				className={`${css.card} ${css.cardPoster}`}
+				onClick={handleCardClick}
+				data-kind="seerr"
+				data-id={String(item.id)}
+				spotlightId={spotlightId}
+			>
+				<div className={`${css.cardImg} ${css.imgPoster}`}>
+					{imageUrl
+						? <ProxiedImage className={css.cardImage} src={imageUrl} alt={item.title || item.name} />
+						: <div className={css.cardPlaceholder}>{item.mediaType === 'movie' ? '🎬' : '📺'}</div>}
+				</div>
+				<div className={css.cardTitle}>{item.title || item.name}</div>
+				<div className={css.cardSubtitle}>{year}</div>
+			</SpottableDiv>
+		);
+	}, [seerrApi, handleCardClick]);
+
+	const renderGameCard = useCallback((game, spotlightId) => (
+		<GameCard
+			key={`game-${game.id}`}
+			game={game}
+			width={150}
+			spotlightId={spotlightId}
+			onSelect={handleGameSelect}
+		/>
+	), [handleGameSelect]);
+
+	const renderCard = useCallback((kind, item, spotlightId) => {
+		if (kind === 'seerr') return renderSeerrCard(item, spotlightId);
+		if (kind === 'game') return renderGameCard(item, spotlightId);
+		return renderJellyfinCard(item, spotlightId);
+	}, [renderSeerrCard, renderGameCard, renderJellyfinCard]);
+
+	// The active grid tab (a type group, Seerr, or Games).
+	const gridConfig = useMemo(() => {
+		if (activeTab === 'seerr') return {items: seerrResults, kind: 'seerr'};
+		if (activeTab === 'games') return {items: gameResults, kind: 'game'};
+		const group = groups.find((g) => g.key === activeTab);
+		if (!group) return null;
+		return {items: group.items, kind: 'jellyfin'};
+	}, [activeTab, groups, seerrResults, gameResults]);
+
+	const renderContent = () => {
+		if (activeTab === 'all') {
+			return (
+				<div className={css.resultsContainer}>
+					{allRows.map((row, rowIndex) => (
+						<RowContainer
+							key={row.id}
+							className={css.resultRow}
+							spotlightId={`search-row-${rowIndex}`}
+							data-row-index={rowIndex}
+							onKeyDown={handleRowKeyDown}
+						>
+							<h2 className={css.rowTitle}>{row.title}<span className={css.rowCount}> ({row.items.length})</span></h2>
+							<div
+								className={css.rowScroller}
+								ref={(el) => { scrollerRefs.current[row.id] = el; }}
+								onFocus={handleRowFocus(row.id)}
+							>
+								<div className={css.resultItems}>
+									{row.items.map((item, idx) => renderCard(row.kind, item, `${row.id}-item-${idx}`))}
+								</div>
+							</div>
+						</RowContainer>
+					))}
+				</div>
+			);
+		}
+		if (!gridConfig) return null;
+		return (
+			<GridContainer className={css.gridWrapper} spotlightId="search-grid">
+				<div className={css.grid}>
+					{gridConfig.items.map((item, idx) => renderCard(gridConfig.kind, item, `grid-item-${idx}`))}
+				</div>
+			</GridContainer>
+		);
+	};
 
 	return (
 		<div className={css.searchContainer}>
@@ -400,20 +448,26 @@ const Search = ({onSelectItem, onSelectPerson}) => {
 						spotlightId="search-input"
 						autoComplete="off"
 					/>
-					{query && (
-						<button className={css.clearBtn} onClick={handleClearSearch}>
-							×
-						</button>
-					)}
+					{query && <button className={css.clearBtn} onClick={handleClearSearch}>×</button>}
 				</div>
 			</div>
 
 			<div className={css.searchResults}>
-				{isLoading ? (
-					<div className={css.loadingIndicator}>
-						<LoadingSpinner />
-						<p>{$L('Searching...')}</p>
+				{hasResults && (
+					<div className={css.tabsRow} onKeyDown={handleTabsKeyDown}>
+						<DetailsTabBar
+							tabs={tabs}
+							activeId={activeTab}
+							onSelect={handleSelectTab}
+							onActivate={handleSelectTab}
+							expanded
+							spotlightId="search-tabs"
+						/>
 					</div>
+				)}
+
+				{isLoading && !hasResults ? (
+					<div className={css.loadingIndicator}><LoadingSpinner /><p>{$L('Searching...')}</p></div>
 				) : !query || query.length < MIN_SEARCH_LENGTH ? (
 					<div className={css.emptyState}>
 						<SearchIcon />
@@ -426,38 +480,7 @@ const Search = ({onSelectItem, onSelectPerson}) => {
 						<p>{$L('Try a different search term')}</p>
 					</div>
 				) : (
-					<div className={css.resultsContainer}>
-						{visibleRows.map((row, rowIndex) => {
-							return (
-								<RowContainer
-									key={row.id}
-									className={css.resultRow}
-									spotlightId={`search-row-${rowIndex}`}
-									data-row-index={rowIndex}
-									onKeyDown={handleRowKeyDown}
-								>
-									<h2 className={css.rowTitle}>
-										{row.title}
-										{row.items.length < row.totalCount && (
-											<span className={css.rowCount}> ({row.items.length}/{row.totalCount})</span>
-										)}
-									</h2>
-									<div
-										className={css.rowScroller}
-										ref={(el) => {scrollerRefs.current[row.id] = el;}}
-										onFocus={handleRowFocus(row.id, row.totalCount)}
-									>
-										<div className={css.resultItems}>
-											{row.type === 'seerr'
-												? row.items.map((item, idx) => renderSeerrCard(item, idx, row.id))
-												: row.items.map((item, idx) => renderJellyfinCard(item, idx, row.id))
-											}
-										</div>
-									</div>
-								</RowContainer>
-							);
-						})}
-					</div>
+					renderContent()
 				)}
 			</div>
 		</div>
