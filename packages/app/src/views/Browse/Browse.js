@@ -881,7 +881,7 @@ const Browse = ({
 			// Recommendation rows are only built by fetchAllData, so treat an enabled one
 			// as dynamic config. Otherwise enabling it shows nothing until the cache expires.
 			const hasEnabledRecommendationRow = homeRowsConfig.some(
-				(row) => row.enabled && (row.id.startsWith('since-you-watched-') || row.id === 'rewatch')
+				(row) => row.enabled && (row.id.startsWith('sinceyouwatched') || row.id === 'rewatch')
 			);
 			const hasEnabledMediaSectionRow = homeRowsConfig.some(
 				(row) => row.enabled && ['audioartists', 'audioalbums', 'audioplaylists', 'resumeaudio', 'activerecordings'].includes(row.id)
@@ -1283,8 +1283,8 @@ const Browse = ({
 					const recordingsEnabled = homeRowsConfig.some((row) => row.enabled && row.id === 'activerecordings');
 					const enabledPluginSections = (settings.pluginSections || []).filter((section) => section.enabled);
 					const sinceYouWatchedIndexes = homeRowsConfig
-						.filter((row) => row.enabled && row.id.startsWith('since-you-watched-'))
-						.map((row) => parseInt(row.id.replace('since-you-watched-', ''), 10))
+						.filter((row) => row.enabled && row.id.startsWith('sinceyouwatched'))
+						.map((row) => parseInt(row.id.replace('sinceyouwatched', ''), 10))
 						.filter((idx) => idx >= 1)
 						.sort((a, b) => a - b);
 					const rewatchEnabled = homeRowsConfig.some((row) => row.enabled && row.id === 'rewatch');
