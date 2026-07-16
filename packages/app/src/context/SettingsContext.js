@@ -26,11 +26,11 @@ const DEFAULT_HOME_ROWS = [
 	{id: 'imdb-popular-tv', name: 'IMDb Most Popular TV Shows', enabled: false, order: 18},
 	{id: 'imdb-lowest-rated', name: 'IMDb Lowest Rated Movies', enabled: false, order: 19},
 	{id: 'imdb-top-english', name: 'IMDb Top Rated English Movies', enabled: false, order: 20},
-	{id: 'since-you-watched-1', name: 'Since You Watched Row 1', enabled: false, order: 21},
-	{id: 'since-you-watched-2', name: 'Since You Watched Row 2', enabled: false, order: 22},
-	{id: 'since-you-watched-3', name: 'Since You Watched Row 3', enabled: false, order: 23},
-	{id: 'since-you-watched-4', name: 'Since You Watched Row 4', enabled: false, order: 24},
-	{id: 'since-you-watched-5', name: 'Since You Watched Row 5', enabled: false, order: 25},
+	{id: 'sinceyouwatched1', name: 'Since You Watched Row 1', enabled: false, order: 21},
+	{id: 'sinceyouwatched2', name: 'Since You Watched Row 2', enabled: false, order: 22},
+	{id: 'sinceyouwatched3', name: 'Since You Watched Row 3', enabled: false, order: 23},
+	{id: 'sinceyouwatched4', name: 'Since You Watched Row 4', enabled: false, order: 24},
+	{id: 'sinceyouwatched5', name: 'Since You Watched Row 5', enabled: false, order: 25},
 	{id: 'rewatch', name: 'Rewatch', enabled: false, order: 26},
 	{id: 'playlists', name: 'Playlists', enabled: false, order: 27},
 	{id: 'audioartists', name: 'Music Artists', enabled: false, order: 28},
@@ -267,12 +267,7 @@ const TV_TO_SERVER_ROW = {
 	'imdb-popular-movies': 'imdb_most_popular_movies',
 	'imdb-popular-tv': 'imdb_most_popular_tv_shows',
 	'imdb-lowest-rated': 'imdb_lowest_rated_movies',
-	'imdb-top-english': 'imdb_top_english_movies',
-	'since-you-watched-1': 'sinceyouwatched1',
-	'since-you-watched-2': 'sinceyouwatched2',
-	'since-you-watched-3': 'sinceyouwatched3',
-	'since-you-watched-4': 'sinceyouwatched4',
-	'since-you-watched-5': 'sinceyouwatched5'
+	'imdb-top-english': 'imdb_top_english_movies'
 };
 const SERVER_TO_TV_ROW = {
 	'latestmedia': 'latest-media',
@@ -293,12 +288,7 @@ const SERVER_TO_TV_ROW = {
 	'imdb_most_popular_movies': 'imdb-popular-movies',
 	'imdb_most_popular_tv_shows': 'imdb-popular-tv',
 	'imdb_lowest_rated_movies': 'imdb-lowest-rated',
-	'imdb_top_english_movies': 'imdb-top-english',
-	'sinceyouwatched1': 'since-you-watched-1',
-	'sinceyouwatched2': 'since-you-watched-2',
-	'sinceyouwatched3': 'since-you-watched-3',
-	'sinceyouwatched4': 'since-you-watched-4',
-	'sinceyouwatched5': 'since-you-watched-5'
+	'imdb_top_english_movies': 'imdb-top-english'
 };
 
 export {TV_TO_SERVER_ROW};

@@ -1598,7 +1598,7 @@ const Settings = ({ onBack, onLibrariesChanged, panelMode }) => {
 			{renderOptionItem('homeRowsPosterSize', $L('Home Row Card Display Size'), getPosterSizeOptions(), $L('Default'), 'aspectratio')}
 			{renderOptionItem('homeRowOverlay', $L('Home Row Info Overlay'), getHomeRowOverlayOptions(), $L('Off'), 'info')}
 			{renderNavItem('homeRows', $L('Home Sections'), $L('Reorder and toggle home rows'), openHomeRows, 'list')}
-			{(settings.homeRows || []).some((row) => row.enabled && row.id.startsWith('since-you-watched-')) && (
+			{(settings.homeRows || []).some((row) => row.enabled && row.id.startsWith('sinceyouwatched')) && (
 				<>
 					{renderOptionItem('sinceYouWatchedSource', $L('Since You Watched Source'), getSinceYouWatchedSourceOptions(), $L('Local'), 'browser')}
 					{renderOptionItem('sinceYouWatchedSourceItem', $L('Since You Watched Seed'), getSinceYouWatchedSourceItemOptions(), $L('Recently Watched'), 'playcircle')}

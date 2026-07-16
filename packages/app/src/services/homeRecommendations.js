@@ -363,7 +363,7 @@ export async function loadSinceYouWatchedRows(api, settings, enabledIndexes, onl
 				const onlineItems = await getOnlineRecommendations(settings, seed).catch(() => []);
 				if (onlineItems.length) {
 					return {
-						id: `since-you-watched-${idx}`,
+						id: `sinceyouwatched${idx}`,
 						seedName: seed.Name || '',
 						items: onlineItems,
 						isSeerr: true
@@ -378,7 +378,7 @@ export async function loadSinceYouWatchedRows(api, settings, enabledIndexes, onl
 			}).catch(() => []);
 			if (!items.length) return null;
 			return {
-				id: `since-you-watched-${idx}`,
+				id: `sinceyouwatched${idx}`,
 				seedName: seed.Name || '',
 				items
 			};
